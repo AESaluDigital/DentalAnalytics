@@ -27,7 +27,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${jakarta.variable} ${inter.variable}`}>
+    // suppressHydrationWarning: extensões (ex.: Google Tag Assistant) injetam atributos no <html>.
+    <html lang="pt-BR" className={`${jakarta.variable} ${inter.variable}`} suppressHydrationWarning>
       <body>{children}</body>
     </html>
   );

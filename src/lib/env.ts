@@ -15,7 +15,13 @@ const schema = z.object({
   DATABASE_SSL: z.enum(["true", "false"]).default("false"),
 
   META_ACCESS_TOKEN: optional,
+  META_APP_ID: optional,
   META_APP_SECRET: optional,
+  /** Facebook Login for Business: ID da configuração (apps do tipo "Empresa"). Opcional. */
+  META_LOGIN_CONFIG_ID: optional,
+
+  /** Chave (32 bytes, base64url) que criptografa os tokens das Integrações no banco. */
+  INTEGRATIONS_KEY: optional,
   META_API_VERSION: z.string().regex(/^v\d+\.\d+$/).default("v26.0"),
 
   GOOGLE_CLIENT_ID: optional,

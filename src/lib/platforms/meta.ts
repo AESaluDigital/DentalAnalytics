@@ -1,6 +1,7 @@
 import "server-only";
 import { createHmac } from "node:crypto";
 import { env } from "../env";
+import { metaAccessToken } from "../integrations";
 import { eachDay } from "../dates";
 import type { AdsCampaignRow, AdsDailyRow, AdsPlatformData, AdsTotals, DateRange } from "../types";
 import { PlatformError, fetchJson, num } from "./http";
@@ -37,19 +38,27 @@ interface InsightsResponse {
 const PLATFORM = "Meta Ads";
 const MAX_PAGES = 20;
 
-function credentials() {
+export async function metaCredentials() {
   const e = env();
-  if (!e.META_ACCESS_TOKEN) throw new PlatformError(PLATFORM, "META_ACCESS_TOKEN não configurado no servidor.");
-  return { token: e.META_ACCESS_TOKEN, secret: e.META_APP_SECRET, version: e.META_API_VERSION };
+  const token = await metaAccessToken();
+  if (!token) {
+    throw new PlatformError(PLATFORM, "Meta não conectada. Um admin deve conectar em Integrações.");
+  }
+  return { token, secret: e.META_APP_SECRET, version: e.META_API_VERSION };
+}
+
+export function appSecretProof(token: string, secret?: string): string | undefined {
+  return secret ? createHmac("sha256", secret).update(token).digest("hex") : undefined;
 }
 
 async function insights(
   accountId: string,
   params: Record<string, string>,
 ): Promise<InsightRow[]> {
-  const { token, secret, version } = credentials();
+  const { token, secret, version } = await metaCredentials();
   const search = new URLSearchParams(params);
-  if (secret) search.set("appsecret_proof", createHmac("sha256", secret).update(token).digest("hex"));
+  const proof = appSecretProof(token, secret);
+  if (proof) search.set("appsecret_proof", proof);
 
   let url: string | undefined =
     `https://graph.facebook.com/${version}/act_${encodeURIComponent(accountId)}/insights?${search}`;

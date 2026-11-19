@@ -45,3 +45,16 @@ CREATE TABLE IF NOT EXISTS reports (
 );
 
 CREATE INDEX IF NOT EXISTS reports_client_idx ON reports (client_id, created_at DESC);
+
+-- Conexões OAuth (Meta / Google) feitas pela tela de Integrações.
+-- O token fica CRIPTOGRAFADO (AES-256-GCM, chave INTEGRATIONS_KEY do .env).
+CREATE TABLE IF NOT EXISTS integrations (
+  provider         TEXT PRIMARY KEY CHECK (provider IN ('meta', 'google')),
+  account_name     TEXT NOT NULL,
+  account_id       TEXT NOT NULL,
+  token_encrypted  TEXT NOT NULL,
+  scopes           TEXT NOT NULL DEFAULT '',
+  expires_at       TIMESTAMPTZ,
+  connected_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  connected_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);

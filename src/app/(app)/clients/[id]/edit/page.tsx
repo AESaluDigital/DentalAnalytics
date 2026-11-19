@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { queryOne } from "@/lib/db";
 import { deleteClientAction } from "@/lib/actions/clients";
 import ClientForm from "@/components/ClientForm";
+import { accountSuggestions } from "@/lib/suggestions";
 import type { ClientRow } from "@/lib/types";
 
 export default async function EditClientPage({ params }: { params: Promise<{ id: string }> }) {
@@ -20,7 +21,7 @@ export default async function EditClientPage({ params }: { params: Promise<{ id:
   return (
     <div className="stack">
       <h1>Editar {client.name}</h1>
-      <ClientForm client={client} />
+      <ClientForm client={client} suggestions={await accountSuggestions()} />
       <form action={deleteClientAction} className="card row between">
         <span className="ink-2">Excluir o cliente apaga também todos os relatórios e links dele.</span>
         <input type="hidden" name="id" value={client.id} />

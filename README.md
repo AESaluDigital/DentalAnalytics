@@ -35,7 +35,30 @@ Não existe cadastro aberto. Usuários são criados ou atualizados com `npm run 
 navegar e gerar relatórios. Para bloquear alguém, rode
 `UPDATE users SET active = false WHERE email = '...'`: o acesso cai na hora.
 
-### Meta Ads
+### Integrações (recomendado): conectar com login de administrador
+
+Na tela **Integrações** (menu do admin), clique em **Conectar Meta** e **Conectar Google** e entre
+com a conta administradora de cada plataforma, pelo login oficial delas. O app:
+
+- pede só permissões de leitura: Meta `ads_read`; Google Ads e Analytics `readonly`;
+- não vê nem guarda senhas, e guarda o token criptografado no banco (AES-256-GCM, chave `INTEGRATIONS_KEY`);
+- lista as contas de anúncio e as propriedades GA4 acessíveis e as sugere no cadastro de clientes;
+- em **Desconectar**, apaga o token e revoga o acesso na própria plataforma.
+
+Configuração única no `.env`: `INTEGRATIONS_KEY`, `META_APP_ID` + `META_APP_SECRET` (app da Meta
+com Login do Facebook) e `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` (cliente OAuth "Aplicativo da Web").
+As URIs de redirecionamento a cadastrar aparecem na própria tela.
+
+**Uso responsável das APIs (evita bloqueios).** As consultas passam por uma fila com no máximo 4
+chamadas simultâneas por plataforma. Em `429` ou `RESOURCE_EXHAUSTED`, o app espera (`Retry-After`
+ou backoff exponencial) antes de tentar de novo. Quando a Meta sinaliza limite de uso, o app para
+na hora e pausa novas consultas por 5 minutos. O dashboard usa cache de 3 minutos e a lista de contas,
+de 10 minutos.
+
+O token da Meta vale cerca de 60 dias. A tela avisa quando estiver perto de vencer e basta clicar em
+**Reconectar**. Os tokens fixos do `.env` (abaixo) continuam funcionando como alternativa.
+
+### Meta Ads (alternativa: token fixo)
 
 1. No Business Manager, crie um **System User** e atribua a ele as contas de anúncio dos clientes.
 2. Gere um token com a permissão `ads_read` → `META_ACCESS_TOKEN`.
