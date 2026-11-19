@@ -1,0 +1,149 @@
+import "server-only";
+import { createHmac } from "node:crypto";
+import { env } from "../env";
+import { eachDay } from "../dates";
+import type { AdsCampaignRow, AdsDailyRow, AdsPlatformData, AdsTotals, DateRange } from "../types";
+import { PlatformError, fetchJson, num } from "./http";
+
+/**
+ * Meta Marketing API — Ads Insights
+ * Docs: https://developers.facebook.com/docs/marketing-api/insights
+ * GET /act_{ad_account_id}/insights
+ */
+
+interface ActionStat {
+  action_type: string;
+  value: string;
+}
+
+interface InsightRow {
+  spend?: string;
+  impressions?: string;
+  reach?: string;
+  inline_link_clicks?: string;
+  actions?: ActionStat[];
+  action_values?: ActionStat[];
+  account_currency?: string;
+  campaign_id?: string;
+  campaign_name?: string;
+  date_start?: string;
+}
+
+interface InsightsResponse {
+  data: InsightRow[];
+  paging?: { next?: string };
+}
+
+const PLATFORM = "Meta Ads";
+const MAX_PAGES = 20;
+
+function credentials() {
+  const e = env();
+  if (!e.META_ACCESS_TOKEN) throw new PlatformError(PLATFORM, "META_ACCESS_TOKEN não configurado no servidor.");
+  return { token: e.META_ACCESS_TOKEN, secret: e.META_APP_SECRET, version: e.META_API_VERSION };
+}
+
+async function insights(
+  accountId: string,
+  params: Record<string, string>,
+): Promise<InsightRow[]> {
+  const { token, secret, version } = credentials();
+  const search = new URLSearchParams(params);
+  if (secret) search.set("appsecret_proof", createHmac("sha256", secret).update(token).digest("hex"));
+
+  let url: string | undefined =
+    `https://graph.facebook.com/${version}/act_${encodeURIComponent(accountId)}/insights?${search}`;
+  const rows: InsightRow[] = [];
+  let pages = 0;
+
+  while (url && pages < MAX_PAGES) {
+    const res: InsightsResponse = await fetchJson<InsightsResponse>(PLATFORM, url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    rows.push(...(res.data ?? []));
+    url = res.paging?.next;
+    pages++;
+  }
+  return rows;
+}
+
+function timeRange(r: DateRange): string {
+  return JSON.stringify({ since: r.start, until: r.end });
+}
+
+function actionValue(list: ActionStat[] | undefined, type: string): number {
+  return num(list?.find((a) => a.action_type === type)?.value);
+}
+
+function toTotals(row: InsightRow | undefined, conversionAction: string): AdsTotals {
+  return {
+    spend: num(row?.spend),
+    impressions: num(row?.impressions),
+    clicks: num(row?.inline_link_clicks),
+    reach: num(row?.reach),
+    conversions: actionValue(row?.actions, conversionAction),
+    conversionValue: actionValue(row?.action_values, conversionAction),
+  };
+}
+
+export async function fetchMeta(
+  accountId: string,
+  conversionAction: string,
+  range: DateRange,
+  prev: DateRange,
+): Promise<AdsPlatformData> {
+  const totalsFields = "spend,impressions,reach,inline_link_clicks,actions,action_values,account_currency";
+
+  const [current, previous, daily, campaigns] = await Promise.all([
+    insights(accountId, { level: "account", time_range: timeRange(range), fields: totalsFields }),
+    insights(accountId, { level: "account", time_range: timeRange(prev), fields: totalsFields }),
+    insights(accountId, {
+      level: "account",
+      time_range: timeRange(range),
+      time_increment: "1",
+      fields: "spend,impressions,inline_link_clicks,actions",
+      limit: "100",
+    }),
+    insights(accountId, {
+      level: "campaign",
+      time_range: timeRange(range),
+      fields: "campaign_id,campaign_name,spend,impressions,inline_link_clicks,actions,action_values",
+      sort: "spend_descending",
+      limit: "100",
+    }),
+  ]);
+
+  const byDate = new Map(daily.map((r) => [r.date_start, r]));
+  const dailyRows: AdsDailyRow[] = eachDay(range).map((date) => {
+    const r = byDate.get(date);
+    return {
+      date,
+      spend: num(r?.spend),
+      impressions: num(r?.impressions),
+      clicks: num(r?.inline_link_clicks),
+      conversions: actionValue(r?.actions, conversionAction),
+    };
+  });
+
+  const campaignRows: AdsCampaignRow[] = campaigns
+    .map((r) => ({
+      id: r.campaign_id ?? "",
+      name: r.campaign_name ?? "(sem nome)",
+      spend: num(r.spend),
+      impressions: num(r.impressions),
+      clicks: num(r.inline_link_clicks),
+      conversions: actionValue(r.actions, conversionAction),
+      conversionValue: actionValue(r.action_values, conversionAction),
+    }))
+    .sort((a, b) => b.spend - a.spend);
+
+  return {
+    accountId,
+    currency: current[0]?.account_currency ?? "BRL",
+    conversionLabel: conversionAction,
+    totals: toTotals(current[0], conversionAction),
+    previousTotals: toTotals(previous[0], conversionAction),
+    daily: dailyRows,
+    campaigns: campaignRows,
+  };
+}
