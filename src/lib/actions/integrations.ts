@@ -26,18 +26,20 @@ export async function disconnectAction(form: FormData): Promise<void> {
 }
 
 /** Recarrega a lista de contas disponíveis (ignora o cache de 10 min). */
-export async function refreshAccountsAction(): Promise<void> {
+export async function refreshAccountsAction(form?: FormData): Promise<void> {
   await requireAdmin();
   clearDiscoveryCache();
   revalidatePath("/settings/integrations");
+  revalidatePath("/settings/google-ads");
+  if (form?.get("back") === "/settings/google-ads") redirect("/settings/google-ads");
 }
 
 /* ---------- Vincular contas do MCC (Google Ads) aos clientes ---------- */
 
-const PAGE = "/settings/integrations";
+const PAGE = "/settings/google-ads";
 
 function back(kind: "msg" | "error", text: string): never {
-  redirect(`${PAGE}?${kind}=${encodeURIComponent(text)}#gads-link`);
+  redirect(`${PAGE}?${kind}=${encodeURIComponent(text)}`);
 }
 
 /** Só aceita contas que a conexão realmente enxerga no MCC (evita IDs digitados/forjados). */

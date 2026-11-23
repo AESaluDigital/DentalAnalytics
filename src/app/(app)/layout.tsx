@@ -23,6 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Link className="nav-link" href="/dashboard">Dashboard</Link>
             <Link className="nav-link" href="/">Clientes</Link>
             {user.role === "admin" && <Link className="nav-link" href="/clients/new">Novo cliente</Link>}
+            {user.role === "admin" && <Link className="nav-link" href="/settings/google-ads">Contas Google Ads</Link>}
             {user.role === "admin" && <Link className="nav-link" href="/settings/integrations">Integrações</Link>}
             <span className="nav-user">{user.name}</span>
             <form action={logoutAction}>
