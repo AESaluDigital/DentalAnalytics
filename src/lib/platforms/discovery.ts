@@ -6,7 +6,7 @@ import { PlatformError, fetchJson } from "./http";
 
 /**
  * Lista as contas que a conexão enxerga, para escolher os IDs dos clientes sem digitar.
- * Meta:       GET /me/adaccounts                      (https://developers.facebook.com/docs/marketing-api/reference/user/adaccounts)
+ * Meta:       portfólios (/me/businesses) → contas próprias e compartilhadas, mais /me/adaccounts
  * Google Ads: customer_client do MCC ou listAccessibleCustomers
  * GA4:        Admin API accountSummaries              (https://developers.google.com/analytics/devguides/config/admin/v1/rest/v1beta/accountSummaries/list)
  */
@@ -15,18 +15,23 @@ export interface AccountOption {
   id: string;
   name: string;
   detail?: string;
+  /** Agrupamento da conta (ex.: portfólio/Business Manager da Meta). */
+  group?: string;
+  groupId?: string;
 }
 
-export type Discovery<T> = { ok: true; items: T[] } | { ok: false; error: string };
+export type Discovery<T> = { ok: true; items: T[]; notice?: string } | { ok: false; error: string };
+
+type Found = AccountOption[] | { items: AccountOption[]; notice?: string };
 
 const TTL = 10 * 60_000;
 const cache = new Map<string, { at: number; value: Promise<Discovery<AccountOption>> }>();
 
-function cached(key: string, fn: () => Promise<AccountOption[]>, force: boolean): Promise<Discovery<AccountOption>> {
+function cached(key: string, fn: () => Promise<Found>, force: boolean): Promise<Discovery<AccountOption>> {
   const hit = cache.get(key);
   if (!force && hit && Date.now() - hit.at < TTL) return hit.value;
   const value = fn()
-    .then((items) => ({ ok: true as const, items }))
+    .then((r): Discovery<AccountOption> => (Array.isArray(r) ? { ok: true, items: r } : { ok: true, ...r }))
     .catch((err) => {
       cache.delete(key);
       return { ok: false as const, error: err instanceof PlatformError ? err.message : "Erro inesperado." };
@@ -40,36 +45,108 @@ export function clearDiscoveryCache(): void {
 }
 
 /* ---------- Meta ---------- */
+/**
+ * Contas de anúncio que o perfil conectado gerencia, agrupadas por portfólio (Business Manager):
+ * - GET /me/businesses                    portfólios do perfil (precisa de business_management)
+ * - GET /{business}/owned_ad_accounts     contas do próprio portfólio
+ * - GET /{business}/client_ad_accounts    contas de clientes compartilhadas com o portfólio
+ * - GET /me/adaccounts                    contas com acesso direto (pega o que sobrar)
+ * https://developers.facebook.com/docs/marketing-api/business-asset-management
+ */
 interface MetaAdAccount {
   account_id: string;
   name: string;
   currency: string;
   account_status: number;
-  business?: { name?: string };
+  business?: { id?: string; name?: string };
 }
+
+const META_STATUS: Record<number, string> = {
+  2: "desativada",
+  3: "pagamento pendente",
+  7: "em análise",
+  8: "pendente de liquidação",
+  9: "em período de carência",
+  100: "pendente de encerramento",
+  101: "encerrada",
+};
+
+async function metaPaged<T>(path: string, params: Record<string, string>): Promise<T[]> {
+  const { token, secret, version } = await metaCredentials();
+  const q = new URLSearchParams({ limit: "200", ...params });
+  const proof = appSecretProof(token, secret);
+  if (proof) q.set("appsecret_proof", proof);
+  let url: string | undefined = `https://graph.facebook.com/${version}/${path}?${q}`;
+  const out: T[] = [];
+  for (let page = 0; url && page < 20; page++) {
+    const res: { data?: T[]; paging?: { next?: string } } = await fetchJson("Meta Ads", url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    out.push(...(res.data ?? []));
+    url = res.paging?.next;
+  }
+  return out;
+}
+
+const META_ACCOUNT_FIELDS = "account_id,name,currency,account_status";
+export const META_NO_PORTFOLIO = "Sem portfólio (acesso direto)";
+
+/** Rank: conta própria de um portfólio (3) > compartilhada com o portfólio (2) > acesso direto sem portfólio (1). */
+type Ranked = AccountOption & { rank: number };
 
 export function metaAdAccounts(force = false) {
   return cached("meta", async () => {
-    const { token, secret, version } = await metaCredentials();
-    const q = new URLSearchParams({ fields: "account_id,name,currency,account_status,business{name}", limit: "200" });
-    const proof = appSecretProof(token, secret);
-    if (proof) q.set("appsecret_proof", proof);
-    let url: string | undefined = `https://graph.facebook.com/${version}/me/adaccounts?${q}`;
-    const out: MetaAdAccount[] = [];
-    for (let page = 0; url && page < 10; page++) {
-      const res: { data?: MetaAdAccount[]; paging?: { next?: string } } = await fetchJson("Meta Ads", url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      out.push(...(res.data ?? []));
-      url = res.paging?.next;
-    }
-    return out
-      .map((a) => ({
+    const byId = new Map<string, Ranked>();
+    const add = (a: MetaAdAccount, rank: number, group: string, groupId?: string) => {
+      const prev = byId.get(a.account_id);
+      if (prev && prev.rank >= rank) return;
+      const status = a.account_status === 1 ? null : (META_STATUS[a.account_status] ?? "inativa");
+      byId.set(a.account_id, {
         id: a.account_id,
-        name: a.name,
-        detail: [a.business?.name, a.currency, a.account_status === 1 ? null : "inativa"].filter(Boolean).join(" · "),
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+        name: a.name || "(sem nome)",
+        group,
+        groupId,
+        rank,
+        detail: [rank === 2 ? "compartilhada com o portfólio" : null, a.currency, status].filter(Boolean).join(" · "),
+      });
+    };
+
+    let notice: string | undefined;
+    let businesses: { id: string; name: string }[] = [];
+    try {
+      businesses = await metaPaged<{ id: string; name: string }>("me/businesses", { fields: "id,name" });
+    } catch (err) {
+      if (err instanceof PlatformError && err.status === 429) throw err;
+      notice =
+        "Não foi possível ler os portfólios (Business Manager): " +
+        (err instanceof PlatformError ? err.message : "erro inesperado") +
+        ". Reconecte a Meta aceitando a permissão business_management para ver todas as contas dos portfólios.";
+    }
+
+    for (const b of businesses) {
+      const [owned, client] = await Promise.all([
+        metaPaged<MetaAdAccount>(`${b.id}/owned_ad_accounts`, { fields: META_ACCOUNT_FIELDS }).catch(() => []),
+        metaPaged<MetaAdAccount>(`${b.id}/client_ad_accounts`, { fields: META_ACCOUNT_FIELDS }).catch(() => []),
+      ]);
+      owned.forEach((a) => add(a, 3, b.name, b.id));
+      client.forEach((a) => add(a, 2, b.name, b.id));
+    }
+
+    const direct = await metaPaged<MetaAdAccount>("me/adaccounts", { fields: `${META_ACCOUNT_FIELDS},business{id,name}` });
+    for (const a of direct) {
+      if (a.business?.id) add(a, 3, a.business.name ?? a.business.id, a.business.id);
+      else add(a, 1, META_NO_PORTFOLIO);
+    }
+
+    const items = [...byId.values()]
+      .map(({ rank: _rank, ...a }): AccountOption => a)
+      .sort(
+        (a, b) =>
+          Number(a.group === META_NO_PORTFOLIO) - Number(b.group === META_NO_PORTFOLIO) ||
+          (a.group ?? "").localeCompare(b.group ?? "", "pt-BR") ||
+          a.name.localeCompare(b.name, "pt-BR"),
+      );
+    return { items, notice };
   }, force);
 }
 

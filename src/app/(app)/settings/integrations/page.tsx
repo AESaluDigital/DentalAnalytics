@@ -171,7 +171,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           color="var(--series-1)"
           info={meta}
           envFallback={!meta && Boolean(e.META_ACCESS_TOKEN)}
-          description="Entre com o perfil administrador do Business Manager. Permissão pedida: somente leitura de anúncios (ads_read)."
+          description="Entre com o perfil administrador do Business Manager. Permissões pedidas (somente leitura): anúncios (ads_read) e portfólios do Business Manager (business_management)."
         />
         <StatusCard
           provider="google"
@@ -182,6 +182,16 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           description="Entre com a conta Google que acessa o MCC do Google Ads e as propriedades do GA4. Permissões: Google Ads e Analytics (leitura)."
         />
       </div>
+
+      <section className="card row between">
+        <div>
+          <h2 style={{ margin: 0 }}>Portfólios e contas → clientes (Meta Ads)</h2>
+          <p className="muted small" style={{ margin: "4px 0 0" }}>
+            Depois de conectar a Meta, vincule cada conta de anúncio dos seus portfólios ao cliente correspondente.
+          </p>
+        </div>
+        <Link className="btn primary" href="/settings/meta-ads">Abrir Contas Meta Ads</Link>
+      </section>
 
       <section className="card row between">
         <div>
@@ -216,7 +226,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
             Manager da SuperDental, adicione o produto <em>Login do Facebook para Empresas</em> e cadastre a URI de redirecionamento:
             <code className="uri">{redirectUri("meta")}</code>
             Preencha <code>META_APP_ID</code> e <code>META_APP_SECRET</code> no .env (e <code>META_LOGIN_CONFIG_ID</code> se usar uma
-            configuração do Login para Empresas). Quem for conectar precisa ser administrador/desenvolvedor do app.
+            configuração do Login para Empresas — nela marque <code>ads_read</code> e <code>business_management</code>). Quem for conectar precisa ser administrador/desenvolvedor do app.
           </li>
           <li>
             <strong>Google:</strong> no Google Cloud, ative Google Ads API, Analytics Data API e Analytics Admin API; crie um cliente

@@ -8,13 +8,14 @@ import type { Provider } from "./integrations";
 /**
  * Login oficial das plataformas (OAuth 2.0), somente leitura:
  * - Meta:   Facebook Login (https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow)
- *           permissão ads_read; token trocado por um de longa duração (≈60 dias).
+ *           permissões ads_read + business_management (leitura dos portfólios); token trocado por um de longa duração (≈60 dias).
  * - Google: OAuth web server + PKCE (https://developers.google.com/identity/protocols/oauth2/web-server)
  *           escopos adwords + analytics.readonly, acesso offline (refresh token).
  * Nenhuma senha passa pelo app: o login acontece na própria Meta/Google.
  */
 
-export const META_SCOPES = ["ads_read"];
+// business_management é usado só para LER os portfólios (Business Manager) e suas contas; o app não altera nada.
+export const META_SCOPES = ["ads_read", "business_management"];
 export const GOOGLE_SCOPES = [
   "openid",
   "email",

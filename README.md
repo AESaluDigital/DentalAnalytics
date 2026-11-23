@@ -46,7 +46,7 @@ administradores e têm acesso a tudo, mesmo que o papel no banco seja alterado.
 Na tela **Integrações** (menu do admin), clique em **Conectar Meta** e **Conectar Google** e entre
 com a conta administradora de cada plataforma, pelo login oficial delas. O app:
 
-- pede só permissões de leitura: Meta `ads_read`; Google Ads e Analytics `readonly`;
+- pede só permissões de leitura: Meta `ads_read` + `business_management` (para listar os portfólios); Google Ads e Analytics `readonly`;
 - não vê nem guarda senhas, e guarda o token criptografado no banco (AES-256-GCM, chave `INTEGRATIONS_KEY`);
 - lista as contas de anúncio e as propriedades GA4 acessíveis e as sugere no cadastro de clientes;
 - em **Desconectar**, apaga o token e revoga o acesso na própria plataforma.
@@ -67,7 +67,7 @@ O token da Meta vale cerca de 60 dias. A tela avisa quando estiver perto de venc
 ### Meta Ads (alternativa: token fixo)
 
 1. No Business Manager, crie um **System User** e atribua a ele as contas de anúncio dos clientes.
-2. Gere um token com a permissão `ads_read` → `META_ACCESS_TOKEN`.
+2. Gere um token com a permissões `ads_read` e `business_management` → `META_ACCESS_TOKEN`.
 3. Recomendado: `META_APP_SECRET` (o app passa a enviar `appsecret_proof`).
 4. No cadastro do cliente, informe o ID numérico da conta e o `action_type` que conta como
    conversão (ex.: `lead`, `purchase`, `onsite_conversion.messaging_conversation_started_7d`).
