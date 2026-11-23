@@ -3,7 +3,14 @@ import { requireAdmin } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { listIntegrations, type IntegrationInfo, type Provider } from "@/lib/integrations";
 import { isConfigured, redirectUri } from "@/lib/oauth";
-import { disconnectAction, refreshAccountsAction } from "@/lib/actions/integrations";
+import {
+  disconnectAction,
+  importGoogleAdsAction,
+  linkGoogleAdsAction,
+  refreshAccountsAction,
+  unlinkGoogleAdsAction,
+} from "@/lib/actions/integrations";
+import { query } from "@/lib/db";
 import { ga4Properties, googleAdsAccounts, metaAdAccounts, type AccountOption, type Discovery } from "@/lib/platforms/discovery";
 
 export const dynamic = "force-dynamic";
@@ -118,6 +125,89 @@ function AccountList({ title, result, empty }: { title: string; result: Discover
   );
 }
 
+const fmtCustomerId = (id: string) => `${id.slice(0, 3)}-${id.slice(3, 6)}-${id.slice(6)}`;
+
+async function GoogleAdsLinks({ mcc }: { mcc: string | undefined }) {
+  const [list, clients] = await Promise.all([
+    googleAdsAccounts(),
+    query<{ id: number; name: string; google_ads_customer_id: string | null }>(
+      "SELECT id, name, google_ads_customer_id FROM clients ORDER BY name",
+    ),
+  ]);
+  if (!list.ok) return <p className="error" style={{ margin: 0 }}>{list.error}</p>;
+  if (list.items.length === 0) return <p className="muted small" style={{ margin: 0 }}>Nenhuma conta encontrada no MCC.</p>;
+
+  const byAccount = new Map(
+    clients.filter((c) => c.google_ads_customer_id).map((c) => [c.google_ads_customer_id as string, c]),
+  );
+  const free = list.items.filter((a) => !byAccount.has(a.id)).length;
+
+  return (
+    <div className="stack" style={{ gap: 12 }}>
+      <div className="row between">
+        <p className="muted small" style={{ margin: 0 }}>
+          {list.items.length} conta(s){mcc ? ` no MCC ${fmtCustomerId(mcc)}` : ""} · {list.items.length - free} vinculada(s) ·{" "}
+          {free} sem cliente
+        </p>
+        {free > 0 && (
+          <form action={importGoogleAdsAction}>
+            <button className="btn" type="submit">Criar clientes para as {free} conta(s) sem vínculo</button>
+          </form>
+        )}
+      </div>
+      <div className="table-wrap" style={{ maxHeight: 520, overflowY: "auto" }}>
+        <table>
+          <thead>
+            <tr><th>Conta Google Ads</th><th>ID</th><th>Cliente vinculado</th><th>Vincular a</th></tr>
+          </thead>
+          <tbody>
+            {list.items.map((a) => {
+              const linked = byAccount.get(a.id);
+              return (
+                <tr key={a.id}>
+                  <td className="name">
+                    {a.name}
+                    {a.detail && <div className="muted small">{a.detail}</div>}
+                  </td>
+                  <td><code>{fmtCustomerId(a.id)}</code></td>
+                  <td>
+                    {linked ? (
+                      <div className="row" style={{ gap: 8 }}>
+                        <a href={`/clients/${linked.id}`}>{linked.name}</a>
+                        <form action={unlinkGoogleAdsAction}>
+                          <input type="hidden" name="customer_id" value={a.id} />
+                          <button className="btn danger icon" type="submit">Desvincular</button>
+                        </form>
+                      </div>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                  <td>
+                    <form action={linkGoogleAdsAction} className="row" style={{ gap: 8, flexWrap: "nowrap" }}>
+                      <input type="hidden" name="customer_id" value={a.id} />
+                      <select name="client" defaultValue={linked ? String(linked.id) : "new"} aria-label={`Cliente para ${a.name}`}>
+                        <option value="new">+ Novo cliente “{a.name.slice(0, 40)}”</option>
+                        {clients.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                            {c.google_ads_customer_id && c.google_ads_customer_id !== a.id ? " (troca a conta atual)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <button className="btn primary icon" type="submit">{linked ? "Trocar" : "Vincular"}</button>
+                    </form>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 async function Accounts({ meta, google }: { meta: boolean; google: boolean }) {
   const [m, g, a] = await Promise.all([
     meta ? metaAdAccounts() : Promise.resolve<Discovery<AccountOption>>({ ok: false, error: "Conecte a Meta para listar." }),
@@ -133,7 +223,7 @@ async function Accounts({ meta, google }: { meta: boolean; google: boolean }) {
   );
 }
 
-export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string }> }) {
+export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string; msg?: string }> }) {
   await requireAdmin();
   const sp = await searchParams;
   const e = env();
@@ -155,6 +245,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       {sp.ok && (
         <p className="notice ok" role="status">✓ {sp.ok === "meta" ? "Meta" : "Google"} conectado com sucesso.</p>
       )}
+      {sp.msg && <p className="notice ok" role="status">✓ {sp.msg.slice(0, 300)}</p>}
       {sp.error && <p className="notice err" role="alert">⚠ {sp.error.slice(0, 300)}</p>}
       {e.DEMO_MODE === "true" && (
         <p className="notice" role="note">
@@ -181,6 +272,25 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           description="Entre com a conta Google que acessa o MCC do Google Ads e as propriedades do GA4. Permissões: Google Ads e Analytics (leitura)."
         />
       </div>
+
+      <section className="card stack" id="gads-link">
+        <div>
+          <h2 style={{ margin: 0 }}>Contas do MCC → clientes (Google Ads)</h2>
+          <p className="muted small" style={{ margin: "4px 0 0" }}>
+            Depois de conectar o Google com a conta que acessa o MCC, escolha a qual cliente cada conta pertence. O dashboard e os
+            relatórios passam a puxar os dados dessa conta. Somente leitura: nada é alterado no Google Ads.
+          </p>
+        </div>
+        {googleReady ? (
+          <Suspense fallback={<div className="dash-loading" role="status">Buscando contas do MCC…</div>}>
+            <GoogleAdsLinks mcc={e.GOOGLE_ADS_LOGIN_CUSTOMER_ID} />
+          </Suspense>
+        ) : (
+          <p className="muted" style={{ margin: 0 }}>
+            Clique em <strong>Conectar Google</strong> acima para listar as contas do MCC.
+          </p>
+        )}
+      </section>
 
       <section className="card stack">
         <div className="row between">
