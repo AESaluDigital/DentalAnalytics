@@ -15,8 +15,8 @@ function pool(): Pool {
     const e = env();
     globalThis.__pgPool = new Pool({
       connectionString: e.DATABASE_URL,
-      ssl: e.DATABASE_SSL === "true" ? { rejectUnauthorized: true } : undefined,
-      max: 10,
+      ssl: e.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: e.DATABASE_SSL === "true" },
+      max: process.env.VERCEL ? 2 : 10,
     });
   }
   return globalThis.__pgPool;

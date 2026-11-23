@@ -18,7 +18,7 @@ const schema = z.object({
     .transform((v) => (v ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)),
 
   DATABASE_URL: z.string().min(1),
-  DATABASE_SSL: z.enum(["true", "false"]).default("false"),
+  DATABASE_SSL: z.enum(["true", "false", "no-verify"]).default("false"),
 
   META_ACCESS_TOKEN: optional,
   META_APP_ID: optional,

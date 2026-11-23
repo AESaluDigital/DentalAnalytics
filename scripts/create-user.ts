@@ -10,6 +10,7 @@ import { stdin, stdout } from "node:process";
 import { parseArgs } from "node:util";
 import bcrypt from "bcryptjs";
 import { Client } from "pg";
+import { pgSsl } from "./pg-ssl";
 
 async function main() {
   const { values } = parseArgs({
@@ -49,7 +50,7 @@ async function main() {
   if (!url) throw new Error("DATABASE_URL não definido no .env");
   const db = new Client({
     connectionString: url,
-    ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: true } : undefined,
+    ssl: pgSsl(),
   });
   await db.connect();
   try {

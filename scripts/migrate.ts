@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Client } from "pg";
+import { pgSsl } from "./pg-ssl";
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -9,7 +10,7 @@ async function main() {
   const sql = readFileSync(resolve(process.cwd(), "db/schema.sql"), "utf8");
   const client = new Client({
     connectionString: url,
-    ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: true } : undefined,
+    ssl: pgSsl(),
   });
 
   await client.connect();
