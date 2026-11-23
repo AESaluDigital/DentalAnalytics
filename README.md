@@ -21,7 +21,7 @@ npm install
 copy .env.example .env      # preencha os valores (veja abaixo)
 npm run db:dev              # opcional: Postgres local embutido (deixe rodando em outro terminal)
 npm run db:migrate          # cria as tabelas
-npm run user:create -- --email voce@empresa.com.br --name "Seu Nome" --role admin
+npm run user:create -- --login voce@empresa.com.br --name "Seu Nome" --role admin
 npm run dev                 # http://localhost:3000
 ```
 
@@ -31,7 +31,10 @@ Defina `APP_URL` com o domínio público, porque ele é usado para montar os lin
 ### Usuários
 
 Não existe cadastro aberto. Usuários são criados ou atualizados com `npm run user:create`
-(a senha é pedida no terminal). `--role admin` pode criar, editar e excluir clientes. `user` pode
+(a senha é pedida no terminal). `--login` aceita e-mail ou nome de usuário (ex.: `--login MariaSilva`),
+e a tela de login não diferencia maiúsculas de minúsculas. A senha deve ter 12+ caracteres;
+para aceitar de 8 a 11, defina `ALLOW_SHORT_PASSWORD=1` ao rodar o comando.
+`--role admin` pode criar, editar e excluir clientes e conectar as Integrações. `user` pode
 navegar e gerar relatórios. Para bloquear alguém, rode
 `UPDATE users SET active = false WHERE email = '...'`: o acesso cai na hora.
 

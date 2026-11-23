@@ -1,7 +1,9 @@
 /**
  * Cria ou atualiza um usuário autorizado.
- * Uso: npm run user:create -- --email pessoa@empresa.com --name "Pessoa" [--role admin]
+ * Uso: npm run user:create -- --login pessoa@empresa.com --name "Pessoa" [--role admin]
+ *      (--login aceita e-mail ou nome de usuário; --email continua funcionando)
  * A senha é pedida no terminal ou lida de NEW_USER_PASSWORD (não passe senha como argumento).
+ * Mínimo recomendado: 12 caracteres. Para aceitar 8–11, defina ALLOW_SHORT_PASSWORD=1.
  */
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
@@ -12,16 +14,19 @@ import { Client } from "pg";
 async function main() {
   const { values } = parseArgs({
     options: {
+      login: { type: "string" },
       email: { type: "string" },
       name: { type: "string" },
       role: { type: "string", default: "user" },
     },
   });
 
-  const email = values.email?.trim().toLowerCase();
+  // O login é salvo em minúsculas; na tela de login a comparação também ignora maiúsculas.
+  const email = (values.login ?? values.email)?.trim().toLowerCase();
   const name = values.name?.trim();
   const role = values.role;
-  if (!email || !name) throw new Error('Informe --email e --name. Ex.: --email a@b.com --name "Fulano"');
+  if (!email || !name) throw new Error('Informe --login e --name. Ex.: --login a@b.com --name "Fulano"');
+  if (!/^[a-z0-9._@+-]{3,200}$/.test(email)) throw new Error("Login inválido: use letras, números, . _ - + @ (3 a 200).");
   if (role !== "admin" && role !== "user") throw new Error("--role deve ser admin ou user");
 
   // Senha: variável NEW_USER_PASSWORD (uso não interativo) ou digitada no terminal.
@@ -31,7 +36,12 @@ async function main() {
     password = await rl.question("Senha (mín. 12 caracteres): ");
     rl.close();
   }
-  if (password.length < 12) throw new Error("Senha muito curta (mínimo 12 caracteres).");
+  const allowShort = process.env.ALLOW_SHORT_PASSWORD === "1";
+  if (password.length < 8) throw new Error("Senha muito curta (mínimo 8 caracteres).");
+  if (password.length < 12) {
+    if (!allowShort) throw new Error("Senha curta (recomendado 12+). Para aceitar mesmo assim, defina ALLOW_SHORT_PASSWORD=1.");
+    console.warn("Aviso: senha com menos de 12 caracteres. Recomenda-se trocar por uma mais longa.");
+  }
 
   const hash = await bcrypt.hash(password, 12);
 

@@ -8,8 +8,8 @@ export default function LoginForm() {
   return (
     <form action={action} className="stack">
       <label>
-        E-mail
-        <input type="email" name="email" autoComplete="username" required />
+        Usuário ou e-mail
+        <input type="text" name="email" autoComplete="username" autoCapitalize="none" spellCheck={false} required />
       </label>
       <label>
         Senha
