@@ -34,7 +34,12 @@ export async function verifyCredentials(email: string, password: string): Promis
   );
   const ok = await bcrypt.compare(password, row?.password_hash ?? (await getDummyHash()));
   if (!row || !ok || !row.active) return null;
-  return { id: row.id, email: row.email, name: row.name, role: row.role };
+  return withMaster({ id: row.id, email: row.email, name: row.name, role: row.role });
+}
+
+/** Contas master (MASTER_ADMINS no .env) têm sempre papel de administrador. */
+function withMaster(user: SessionUser): SessionUser {
+  return env().MASTER_ADMINS.includes(user.email.toLowerCase()) ? { ...user, role: "admin" } : user;
 }
 
 export async function createSession(user: SessionUser): Promise<void> {
@@ -68,10 +73,11 @@ export async function getUser(): Promise<SessionUser | null> {
     const { payload } = await jwtVerify(token, key(), { algorithms: ["HS256"] });
     const uid = Number(payload.uid);
     if (!Number.isInteger(uid)) return null;
-    return await queryOne<SessionUser>(
+    const user = await queryOne<SessionUser>(
       "SELECT id, email, name, role FROM users WHERE id = $1 AND active = TRUE",
       [uid],
     );
+    return user ? withMaster(user) : null;
   } catch {
     return null;
   }

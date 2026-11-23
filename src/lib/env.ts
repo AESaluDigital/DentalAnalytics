@@ -11,6 +11,12 @@ const schema = z.object({
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET precisa de ao menos 32 caracteres"),
   SHARE_LINK_DAYS: z.coerce.number().int().min(0).default(90),
 
+  /** Logins (separados por vírgula) que são sempre administradores, independentemente do papel no banco. */
+  MASTER_ADMINS: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)),
+
   DATABASE_URL: z.string().min(1),
   DATABASE_SSL: z.enum(["true", "false"]).default("false"),
 

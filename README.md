@@ -38,6 +38,9 @@ para aceitar de 8 a 11, defina `ALLOW_SHORT_PASSWORD=1` ao rodar o comando.
 navegar e gerar relatórios. Para bloquear alguém, rode
 `UPDATE users SET active = false WHERE email = '...'`: o acesso cai na hora.
 
+**Conta master:** os logins listados em `MASTER_ADMINS` (no `.env`, separados por vírgula) são sempre
+administradores e têm acesso a tudo, mesmo que o papel no banco seja alterado.
+
 ### Integrações (recomendado): conectar com login de administrador
 
 Na tela **Integrações** (menu do admin), clique em **Conectar Meta** e **Conectar Google** e entre
