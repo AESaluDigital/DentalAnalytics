@@ -20,7 +20,8 @@ export async function loginAction(_prev: LoginState, form: FormData): Promise<Lo
     res = await verifyCredentials(login, password);
   } catch (err) {
     console.error("[login] falha ao verificar credenciais", err);
-    return { error: "Não foi possível entrar agora (falha temporária no servidor). Tente de novo em alguns segundos." };
+    const code = (err as { code?: string })?.code;
+    return { error: `Não foi possível entrar agora (falha temporária no servidor${code ? `, código ${code}` : ""}). Tente de novo em alguns segundos.` };
   }
   if (!res.ok) {
     return {
