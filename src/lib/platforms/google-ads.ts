@@ -242,3 +242,46 @@ export async function fetchGoogleAds(
     breakdown,
   };
 }
+
+/* ---------- Orçamento (consultas leves) ---------- */
+
+/** Gasto diário da conta no intervalo (para o acompanhamento de orçamento do mês). */
+export async function googleDailySpend(customerId: string, range: DateRange): Promise<{ currency: string; daily: { date: string; spend: number }[] }> {
+  const rows = await search(customerId, `SELECT customer.currency_code, segments.date, metrics.cost_micros FROM customer WHERE ${between(range)}`);
+  const byDate = new Map(rows.map((r) => [r.segments?.date, num(r.metrics?.costMicros) / 1_000_000]));
+  return {
+    currency: rows[0]?.customer?.currencyCode ?? "BRL",
+    daily: eachDay(range).map((date) => ({ date, spend: byDate.get(date) ?? 0 })),
+  };
+}
+
+interface BudgetRow {
+  accountBudget?: {
+    approvedSpendingLimitMicros?: string;
+    adjustedSpendingLimitMicros?: string;
+    amountServedMicros?: string;
+    approvedEndDateTime?: string;
+    approvedSpendingLimitType?: string;
+  };
+}
+
+/** Orçamento da conta (faturamento mensal/pedido de orçamento): limite aprovado − valor já veiculado. */
+export async function googleAccountBudget(customerId: string): Promise<{ remaining: number | null; limit: number | null; text: string | null }> {
+  const rows = (await search(
+    customerId,
+    `SELECT account_budget.approved_spending_limit_micros, account_budget.adjusted_spending_limit_micros,
+            account_budget.amount_served_micros, account_budget.approved_end_date_time,
+            account_budget.approved_spending_limit_type
+     FROM account_budget WHERE account_budget.status = 'APPROVED'`,
+  )) as BudgetRow[];
+  const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+  const active = rows
+    .map((r) => r.accountBudget ?? {})
+    .filter((b) => !b.approvedEndDateTime || b.approvedEndDateTime >= now);
+  const b = active[0];
+  if (!b) return { remaining: null, limit: null, text: null };
+  if (b.approvedSpendingLimitType === "INFINITE") return { remaining: null, limit: null, text: "Orçamento da conta sem limite" };
+  const limit = num(b.adjustedSpendingLimitMicros ?? b.approvedSpendingLimitMicros) / 1_000_000;
+  const served = num(b.amountServedMicros) / 1_000_000;
+  return { limit: limit || null, remaining: limit ? Math.max(limit - served, 0) : null, text: null };
+}

@@ -156,3 +156,44 @@ export async function fetchMeta(
     campaigns: campaignRows,
   };
 }
+
+/* ---------- Orçamento (consultas leves) ---------- */
+
+/** Gasto diário da conta no intervalo (para o acompanhamento de orçamento do mês). */
+export async function metaDailySpend(accountId: string, range: DateRange): Promise<{ currency: string; daily: { date: string; spend: number }[] }> {
+  const rows = await insights(accountId, {
+    level: "account",
+    time_range: timeRange(range),
+    time_increment: "1",
+    fields: "spend,account_currency",
+    limit: "100",
+  });
+  const byDate = new Map(rows.map((r) => [r.date_start, num(r.spend)]));
+  return {
+    currency: rows[0]?.account_currency ?? "BRL",
+    daily: eachDay(range).map((date) => ({ date, spend: byDate.get(date) ?? 0 })),
+  };
+}
+
+/**
+ * Limite de gastos e forma de pagamento da conta (Graph API: GET /act_{id}).
+ * spend_cap e amount_spent vêm em centavos; spend_cap "0" = sem limite.
+ */
+export async function metaAccountFunds(accountId: string): Promise<{ remaining: number | null; limit: number | null; text: string | null }> {
+  const { token, secret, version } = await metaCredentials();
+  const q = new URLSearchParams({ fields: "spend_cap,amount_spent,funding_source_details" });
+  const proof = appSecretProof(token, secret);
+  if (proof) q.set("appsecret_proof", proof);
+  const r = await fetchJson<{ spend_cap?: string; amount_spent?: string; funding_source_details?: { display_string?: string } }>(
+    PLATFORM,
+    `https://graph.facebook.com/${version}/act_${encodeURIComponent(accountId)}?${q}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  const cap = num(r.spend_cap) / 100;
+  const spent = num(r.amount_spent) / 100;
+  return {
+    limit: cap > 0 ? cap : null,
+    remaining: cap > 0 ? Math.max(cap - spent, 0) : null,
+    text: r.funding_source_details?.display_string ?? null,
+  };
+}

@@ -43,6 +43,14 @@ export function ensureSchema(): Promise<void> {
         global_pipelines TEXT[],
         connected_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         connected_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+      await pool().query(`CREATE TABLE IF NOT EXISTS client_budgets (
+        client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        month DATE NOT NULL,
+        platform TEXT NOT NULL CHECK (platform IN ('meta', 'google', 'total')),
+        amount NUMERIC(14, 2) NOT NULL CHECK (amount >= 0),
+        updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (client_id, month, platform))`);
     } catch (err) {
       console.error("[db] não foi possível garantir o schema", err);
     }

@@ -7,6 +7,7 @@ import {
   ComposedChart,
   Legend,
   Line,
+  ReferenceLine,
   LineChart,
   ResponsiveContainer,
   Tooltip,
@@ -215,6 +216,48 @@ export function SpendConvCplChart({
           <Line yAxisId="cpl" type="monotone" dataKey="cpl" name="CPL" stroke={colors.cpl} strokeWidth={2}
             strokeDasharray="5 4" dot={false} connectNulls activeDot={{ r: 4, stroke: "var(--surface)", strokeWidth: 2 }}
             isAnimationActive={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/** Orçamento do mês: gasto acumulado real (linha cheia), projeção (tracejada) e orçamento (linha de referência). */
+export function BudgetChart({
+  data,
+  budget,
+  currency = "BRL",
+  height = 280,
+}: {
+  data: { date: string; real: number | null; proj: number | null }[];
+  budget: number | null;
+  currency?: string;
+  height?: number;
+}) {
+  const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency, maximumFractionDigits: 0 });
+  return (
+    <div style={{ width: "100%", height }}>
+      <ResponsiveContainer>
+        <ComposedChart data={data} margin={{ top: 16, right: 16, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke="var(--grid)" vertical={false} />
+          <XAxis dataKey="date" tickFormatter={dayLabel} minTickGap={24} {...axisProps} />
+          <YAxis tickFormatter={(v: number) => compact.format(v)} width={52} axisLine={false} {...axisProps}
+            domain={[0, (max: number) => Math.max(max, budget ?? 0) * 1.08]} />
+          <Tooltip
+            {...tooltipStyle}
+            cursor={{ stroke: "var(--axis)", strokeWidth: 1 }}
+            labelFormatter={(l) => dayLabel(String(l))}
+            formatter={(v, name) => [v === null || v === undefined ? "—" : money.format(Number(v)), name]}
+          />
+          <Legend wrapperStyle={{ color: "var(--ink-2)", fontSize: 13 }} />
+          {budget !== null && (
+            <ReferenceLine y={budget} stroke="var(--series-3)" strokeDasharray="6 4" strokeWidth={2}
+              label={{ value: `Orçamento ${money.format(budget)}`, position: "insideTopLeft", fill: "var(--series-3)", fontSize: 12 }} />
+          )}
+          <Line type="monotone" dataKey="real" name="Gasto acumulado" stroke="var(--series-1)" strokeWidth={2.5} dot={false}
+            connectNulls={false} isAnimationActive={false} />
+          <Line type="monotone" dataKey="proj" name="Projeção" stroke="var(--series-2)" strokeWidth={2} strokeDasharray="5 4"
+            dot={false} connectNulls={false} isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

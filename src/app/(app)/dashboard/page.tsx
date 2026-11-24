@@ -7,6 +7,8 @@ import { getLiveData } from "@/lib/report/live";
 import { hasSellbot } from "@/lib/platforms/sellbot";
 import DashboardToolbar from "@/components/DashboardToolbar";
 import ReportView from "@/components/report/ReportView";
+import BudgetSection from "@/components/BudgetSection";
+import { getBudgetData } from "@/lib/budget";
 import type { ClientRow, PlatformResult, ReportData } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +18,7 @@ export const maxDuration = 120;
 const CLIENT_COLS =
   "id, name, meta_ad_account_id, meta_conversion_action, google_ads_customer_id, ga4_property_id, active";
 
-type Search = Promise<{ client?: string; start?: string; end?: string; refresh?: string }>;
+type Search = Promise<{ client?: string; start?: string; end?: string; refresh?: string; budget_ok?: string; budget_error?: string }>;
 
 function resolveRange(start: string | undefined, end: string | undefined, today: string) {
   const fallback = { start: addDays(today, -29), end: today };
@@ -45,6 +47,13 @@ function Sources({ data, clientId, canManage }: { data: ReportData; clientId: nu
       })}
     </div>
   );
+}
+
+/** Orçamento do mês atual (independe do período escolhido). */
+async function Budget({ client, canEdit, back, ok, error }: { client: ClientRow; canEdit: boolean; back: string; ok: boolean; error?: string }) {
+  const data = await getBudgetData(client);
+  if (data.platforms.length === 0) return null;
+  return <BudgetSection data={data} clientId={client.id} canEdit={canEdit} back={back} ok={ok} error={error} />;
 }
 
 async function LiveData({ client, start, end, force, canExport, canManage }: { client: ClientRow; start: string; end: string; force: boolean; canExport: boolean; canManage: boolean }) {
@@ -119,6 +128,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
         >
           <LiveData client={client} start={start} end={end} force={Boolean(sp.refresh)} canExport={can(user, "export_reports")}
             canManage={can(user, "manage_clients") || can(user, "manage_integrations")} />
+        </Suspense>
+      )}
+
+      {(client.meta_ad_account_id || client.google_ads_customer_id) && (
+        <Suspense
+          key={`budget|${clientId}|${sp.refresh ?? ""}|${sp.budget_ok ?? ""}`}
+          fallback={<div className="card dash-loading" role="status">Calculando o orçamento do mês…</div>}
+        >
+          <Budget
+            client={client}
+            canEdit={can(user, "manage_clients") || can(user, "manage_integrations")}
+            back={`/dashboard?${new URLSearchParams({ client: String(clientId), start, end })}`}
+            ok={sp.budget_ok === "1"}
+            error={sp.budget_error}
+          />
         </Suspense>
       )}
     </div>

@@ -39,6 +39,13 @@ export const METRIC_HELP = {
   openPipeline: "Negócios ainda em aberto no funil agora, com o valor somado (potencial de venda).",
   convToSale: "Vendas no CRM ÷ conversões reportadas pelas plataformas de anúncio. Mostra quanto das conversões virou venda de fato.",
   costPerSale: "Custo por venda: investimento em anúncios ÷ número de vendas no CRM.",
+  budget: "Quanto o cliente disponibilizou para investir em anúncios neste mês (definido aqui no dashboard).",
+  spentMtd: "Quanto já foi gasto em anúncios do dia 1 até hoje, segundo as plataformas.",
+  budgetLeft: "Orçamento do mês menos o que já foi gasto. Negativo = o orçamento já foi ultrapassado.",
+  dailyPace: "Gasto médio por dia nos últimos 7 dias completos — o ritmo atual de investimento.",
+  perDayLeft: "Quanto investir por dia, de hoje até o fim do mês, para usar exatamente o orçamento restante.",
+  projection: "Estimativa de quanto terá sido gasto no fim do mês se o ritmo dos últimos 7 dias continuar.",
+  accountFunds: "Saldo ou limite informado pela própria conta de anúncios (limite de gastos da Meta, orçamento da conta no Google). Aparece quando a plataforma informa.",
   sessionShare: "Fatia das visitas do site que veio deste canal.",
 } as const;
 
