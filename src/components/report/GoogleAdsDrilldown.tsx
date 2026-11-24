@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
+import { dec } from "@/lib/format";
 import { adsCols, MATCH_LABEL, type MetricCol } from "@/lib/metric-cols";
 import { METRIC_HELP } from "@/lib/metric-help";
 import type { AdsCampaignRow, AdsMetrics, GadsKeywordRow, GadsSearchTermRow, GoogleAdsBreakdown } from "@/lib/types";
@@ -162,6 +163,11 @@ export default function GoogleAdsDrilldown({ campaigns, breakdown, currency, tot
                           <span>
                             {c.name}
                             {groups.length > 0 && <span className="tree-count">{groups.length} grupo{groups.length > 1 ? "s" : ""}</span>}
+                            {c.conversionTypes && c.conversionTypes.length > 0 && (
+                              <span className="conv-mini">
+                                Conversões: {c.conversionTypes.map((t) => `${t.label} (${dec(t.conversions)})`).join(" · ")}
+                              </span>
+                            )}
                           </span>
                         </span>
                       </td>

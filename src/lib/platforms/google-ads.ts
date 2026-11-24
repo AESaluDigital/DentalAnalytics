@@ -11,6 +11,7 @@ import type {
   GadsKeywordRow,
   GadsSearchTermRow,
   GoogleAdsBreakdown,
+  ConversionTypeRow,
 } from "../types";
 import { googleAccessToken } from "./google-oauth";
 import { PlatformError, fetchJson, num } from "./http";
@@ -35,7 +36,12 @@ interface SearchRow {
   adGroup?: { id?: string; name?: string };
   adGroupCriterion?: { criterionId?: string; keyword?: { text?: string; matchType?: string } };
   searchTermView?: { searchTerm?: string };
-  segments?: { date?: string; keyword?: { info?: { text?: string; matchType?: string } } };
+  segments?: {
+    date?: string;
+    keyword?: { info?: { text?: string; matchType?: string } };
+    conversionActionName?: string;
+    conversionActionCategory?: string;
+  };
   metrics?: Metrics;
 }
 
@@ -186,12 +192,31 @@ async function fetchBreakdown(customerId: string, range: DateRange): Promise<Goo
   };
 }
 
+/** Categorias das ações de conversão do Google Ads (quando a ação não tem nome). */
+const CATEGORY_LABEL: Record<string, string> = {
+  CONTACT: "Contato",
+  SUBMIT_LEAD_FORM: "Envio de formulário",
+  PHONE_CALL_LEAD: "Ligações",
+  BOOK_APPOINTMENT: "Agendamentos",
+  REQUEST_QUOTE: "Pedidos de orçamento",
+  GET_DIRECTIONS: "Rotas (como chegar)",
+  OUTBOUND_CLICK: "Cliques de saída",
+  SIGNUP: "Cadastros",
+  PAGE_VIEW: "Visualizações de página",
+  PURCHASE: "Compras",
+  QUALIFIED_LEAD: "Leads qualificados",
+  CONVERTED_LEAD: "Leads convertidos",
+  ENGAGEMENT: "Engajamento",
+  STORE_VISIT: "Visitas à loja",
+  DEFAULT: "Outras conversões",
+};
+
 export async function fetchGoogleAds(
   customerId: string,
   range: DateRange,
   prev: DateRange,
 ): Promise<AdsPlatformData> {
-  const [daily, previous, campaigns, breakdown] = await Promise.all([
+  const [daily, previous, campaigns, breakdown, byAction] = await Promise.all([
     search(
       customerId,
       `SELECT customer.currency_code, segments.date, ${METRICS} FROM customer WHERE ${between(range)}`,
@@ -204,7 +229,36 @@ export async function fetchGoogleAds(
        ORDER BY metrics.cost_micros DESC LIMIT 100`,
     ),
     fetchBreakdown(customerId, range),
+    // Conversões por ação de conversão (ex.: "Clique no WhatsApp", "Formulário"). Falha não derruba o relatório.
+    search(
+      customerId,
+      `SELECT campaign.id, segments.conversion_action_name, segments.conversion_action_category,
+              metrics.conversions, metrics.conversions_value
+       FROM campaign WHERE ${between(range)} AND metrics.conversions > 0`,
+    ).catch(() => [] as SearchRow[]),
   ]);
+
+  // Agrupa por ação de conversão: por campanha e no total da conta.
+  const actionLabel = (r: SearchRow) =>
+    r.segments?.conversionActionName || CATEGORY_LABEL[r.segments?.conversionActionCategory ?? ""] || "Outras conversões";
+  const perCampaign = new Map<string, Map<string, ConversionTypeRow>>();
+  const total = new Map<string, ConversionTypeRow>();
+  for (const r of byAction) {
+    const label = actionLabel(r);
+    const c = num(r.metrics?.conversions);
+    const v = num(r.metrics?.conversionsValue);
+    const id = r.campaign?.id ?? "";
+    const m = perCampaign.get(id) ?? new Map<string, ConversionTypeRow>();
+    for (const target of [m, total]) {
+      const x = target.get(label) ?? { label, conversions: 0, conversionValue: 0 };
+      x.conversions += c;
+      x.conversionValue += v;
+      target.set(label, x);
+    }
+    perCampaign.set(id, m);
+  }
+  const sorted = (m: Map<string, ConversionTypeRow> | undefined) =>
+    m ? [...m.values()].sort((a, b) => b.conversions - a.conversions) : undefined;
 
   const byDate = new Map(daily.map((r) => [r.segments?.date, r.metrics]));
   const dailyRows: AdsDailyRow[] = eachDay(range).map((date) => {
@@ -229,6 +283,7 @@ export async function fetchGoogleAds(
     id: r.campaign?.id ?? "",
     name: r.campaign?.name ?? "(sem nome)",
     ...totalsFrom(r.metrics),
+    conversionTypes: sorted(perCampaign.get(r.campaign?.id ?? "")),
   }));
 
   return {
@@ -240,6 +295,7 @@ export async function fetchGoogleAds(
     daily: dailyRows,
     campaigns: campaignRows,
     breakdown,
+    conversionTypes: sorted(total) ?? [],
   };
 }
 

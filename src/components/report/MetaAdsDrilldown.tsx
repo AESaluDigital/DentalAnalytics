@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { dec } from "@/lib/format";
 import { adsCols, type MetricCol } from "@/lib/metric-cols";
 import { METRIC_HELP } from "@/lib/metric-help";
 import type { AdsCampaignRow, AdsMetrics, MetaAdRow, MetaBreakdown } from "@/lib/types";
@@ -227,6 +228,11 @@ export default function MetaAdsDrilldown({ campaigns, breakdown, currency, total
                         <span>
                           {c.name}
                           {sets.length > 0 && <span className="tree-count">{sets.length} conjunto{sets.length > 1 ? "s" : ""}</span>}
+                          {c.conversionTypes && c.conversionTypes.length > 0 && (
+                              <span className="conv-mini">
+                                Conversões: {c.conversionTypes.map((t) => `${t.label} (${dec(t.conversions)})`).join(" · ")}
+                              </span>
+                            )}
                         </span>
                       </span>
                     </td>

@@ -25,6 +25,15 @@ export interface AdsDailyRow {
   conversions: number;
 }
 
+/** Conversões de um tipo (ex.: "Conversas no WhatsApp", "Formulário instantâneo", ação do Google). */
+export interface ConversionTypeRow {
+  label: string;
+  conversions: number;
+  conversionValue: number;
+  /** Investimento das campanhas/conjuntos que otimizam para este tipo (só Meta). */
+  spend?: number;
+}
+
 export interface AdsCampaignRow {
   id: string;
   name: string;
@@ -33,6 +42,8 @@ export interface AdsCampaignRow {
   clicks: number;
   conversions: number;
   conversionValue: number;
+  /** De onde vieram as conversões desta campanha. */
+  conversionTypes?: ConversionTypeRow[];
 }
 
 /** Métricas comuns a campanha, grupo, palavra-chave e termo de pesquisa. */
@@ -120,6 +131,8 @@ export interface AdsPlatformData {
   previousTotals: AdsTotals;
   daily: AdsDailyRow[];
   campaigns: AdsCampaignRow[];
+  /** Conversões da conta somadas por tipo. */
+  conversionTypes?: ConversionTypeRow[];
   /** Só Google Ads. Ausente em relatórios antigos. */
   breakdown?: GoogleAdsBreakdown;
   /** Só Meta Ads. Ausente em relatórios antigos. */

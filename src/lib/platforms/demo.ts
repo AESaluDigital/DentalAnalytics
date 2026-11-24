@@ -94,14 +94,23 @@ export function demoMeta(accountId: string, conversionAction: string, range: Dat
     "[Remarketing] Visitantes 30 dias",
     "[Mensagens] WhatsApp — Região",
   ]);
+  // Cada campanha com o seu resultado (como a Meta faz pelo objetivo do conjunto).
+  const metaKind = (name: string) =>
+    name.includes("Mensagens") ? "Conversas iniciadas (WhatsApp/Messenger/Direct)"
+      : name.includes("Remarketing") ? "Leads no site (pixel)" : "Leads do formulário instantâneo";
+  const metaCampaignsTyped = metaCampaigns.map((c) => ({
+    ...c,
+    conversionTypes: [{ label: metaKind(c.name), conversions: c.conversions, conversionValue: c.conversionValue, spend: c.spend }],
+  }));
   return {
     accountId,
     currency: "BRL",
-    conversionLabel: conversionAction,
+    conversionLabel: "Resultado de cada campanha (veja Conversões por tipo)",
     totals,
     previousTotals,
     daily,
-    campaigns: metaCampaigns,
+    campaigns: metaCampaignsTyped,
+    conversionTypes: demoTypesTotal(metaCampaignsTyped),
     metaBreakdown: demoMetaBreakdown(`meta${accountId}`, metaCampaigns),
   };
 }
@@ -110,6 +119,16 @@ export function demoMeta(accountId: string, conversionAction: string, range: Dat
 function demoImage(text: string, hue: number): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},70%,45%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360},70%,30%)"/></linearGradient></defs><rect width="400" height="400" fill="url(#g)"/><text x="200" y="210" font-family="Arial" font-size="34" font-weight="700" fill="#fff" text-anchor="middle">${text}</text></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function demoTypesTotal(rows: AdsCampaignRow[]) {
+  const m = new Map<string, { label: string; conversions: number; conversionValue: number; spend: number }>();
+  for (const c of rows) for (const t of c.conversionTypes ?? []) {
+    const x = m.get(t.label) ?? { label: t.label, conversions: 0, conversionValue: 0, spend: 0 };
+    x.conversions += t.conversions; x.conversionValue += t.conversionValue; x.spend += t.spend ?? 0;
+    m.set(t.label, x);
+  }
+  return [...m.values()].sort((a, b) => b.conversions - a.conversions);
 }
 
 function demoMetaBreakdown(id: string, campaignRows: AdsCampaignRow[]): MetaBreakdown {
@@ -219,7 +238,18 @@ export function demoGoogleAds(customerId: string, range: DateRange, prev: DateRa
     "Pesquisa — Serviços principais",
     "Performance Max — Conversões",
     "Display — Remarketing",
-  ]).map((c) => ({ ...c, conversionValue: r2(c.conversions * 380) }));
+  ]).map((c) => {
+    const wa = Math.round(c.conversions * 0.55), form = Math.round(c.conversions * 0.3);
+    return {
+      ...c,
+      conversionValue: r2(c.conversions * 380),
+      conversionTypes: [
+        { label: "Clique no WhatsApp", conversions: wa, conversionValue: 0 },
+        { label: "Formulário do site", conversions: form, conversionValue: 0 },
+        { label: "Ligações", conversions: c.conversions - wa - form, conversionValue: 0 },
+      ].filter((t) => t.conversions > 0),
+    };
+  });
   return {
     accountId: customerId,
     currency: "BRL",
@@ -228,6 +258,7 @@ export function demoGoogleAds(customerId: string, range: DateRange, prev: DateRa
     previousTotals,
     daily,
     campaigns: campaignRows,
+    conversionTypes: demoTypesTotal(campaignRows).map(({ spend: _s, ...t }) => t),
     breakdown: demoBreakdown(`gads${customerId}`, campaignRows),
   };
 }

@@ -46,6 +46,7 @@ export const METRIC_HELP = {
   perDayLeft: "Quanto investir por dia, de hoje até o fim do mês, para usar exatamente o orçamento restante.",
   projection: "Estimativa de quanto terá sido gasto no fim do mês se o ritmo dos últimos 7 dias continuar.",
   accountFunds: "Saldo ou limite informado pela própria conta de anúncios (limite de gastos da Meta, orçamento da conta no Google). Aparece quando a plataforma informa.",
+  conversionTypes: "De onde vieram as conversões. Na Meta, cada conjunto conta o próprio resultado: conversas iniciadas no WhatsApp/Messenger, leads do formulário instantâneo ou eventos do pixel no site (lead, contato, agendamento…). No Google, cada ação de conversão configurada na conta (ex.: clique no WhatsApp, formulário, ligação).",
   sessionShare: "Fatia das visitas do site que veio deste canal.",
 } as const;
 

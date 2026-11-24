@@ -860,3 +860,15 @@ input:focus-visible, select:focus-visible { box-shadow: 0 0 0 4px color-mix(in s
 .theme-seg .btn { flex: 1; }
 .accent-pop { width: 244px; }
 .accent-pop .accent-title:not(:first-child) { margin-top: 4px; }
+
+/* Conversões por tipo */
+.conv-types { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.conv-type {
+  display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 14px;
+  border: 1px solid var(--border); background: color-mix(in srgb, var(--page) 70%, transparent);
+}
+.conv-type-label { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.conv-type-value { font-family: var(--font-disp); font-size: 1.35rem; font-weight: 800; }
+.conv-type-bar { height: 6px; border-radius: 100px; background: var(--surface-3); overflow: hidden; margin-top: 4px; }
+.conv-type-bar span { display: block; height: 100%; border-radius: 100px; background: var(--brand-teal); animation: grow 0.8s var(--ease) both; }
+.conv-mini { display: block; font-size: 11.5px; color: var(--muted); font-weight: 500; }

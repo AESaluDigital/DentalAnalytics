@@ -3,7 +3,7 @@ import { dec, int, money, pct, signedPct } from "@/lib/format";
 import { EMPTY_ADS, adsKpis, delta, ratio, sumAds } from "@/lib/metrics";
 import { roasText, roasTone, roasValue } from "@/lib/metric-cols";
 import { METRIC_HELP, type MetricKey } from "@/lib/metric-help";
-import type { AdsPlatformData, Ga4Data, PlatformResult, ReportAnalysis, ReportData } from "@/lib/types";
+import type { AdsPlatformData, ConversionTypeRow, Ga4Data, PlatformResult, ReportAnalysis, ReportData } from "@/lib/types";
 import { CategoryBarChart, DailyBarChart, DailyLineChart } from "./Charts";
 import GoogleAdsDrilldown from "./GoogleAdsDrilldown";
 import MetaAdsDrilldown from "./MetaAdsDrilldown";
@@ -132,6 +132,34 @@ function ChannelText({ analysis, canal }: { analysis: ReportAnalysis | null; can
 
 /* ---------- seções ---------- */
 
+/** De onde vieram as conversões: WhatsApp, formulário, pixel do site, ações do Google… */
+function ConversionTypes({ rows, total, currency }: { rows: ConversionTypeRow[]; total: number; currency: string }) {
+  if (!rows.length) return null;
+  const withSpend = rows.some((r) => (r.spend ?? 0) > 0);
+  const withValue = rows.some((r) => r.conversionValue > 0);
+  return (
+    <div>
+      <h3 className="chart-title">
+        <span className="th-help">Conversões por tipo<InfoTip label="Conversões por tipo" text={METRIC_HELP.conversionTypes} /></span>
+      </h3>
+      <div className="conv-types">
+        {rows.map((r) => (
+          <div key={r.label} className="conv-type">
+            <span className="conv-type-label">{r.label}</span>
+            <strong className="conv-type-value">{dec(r.conversions)}</strong>
+            <span className="muted small">
+              {pct(ratio(r.conversions, total))} do total
+              {withSpend && (r.spend ?? 0) > 0 ? ` · ${money(ratio(r.spend ?? 0, r.conversions), currency)} cada` : ""}
+              {withValue && r.conversionValue > 0 ? ` · valor ${money(r.conversionValue, currency)}` : ""}
+            </span>
+            <span className="conv-type-bar"><span style={{ width: `${Math.min((ratio(r.conversions, total) ?? 0) * 100, 100)}%` }} /></span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AdsSection({
   title,
   p,
@@ -183,6 +211,9 @@ function AdsSection({
       </div>
       <ChannelText analysis={analysis} canal={canal} />
       <KpiGrid items={items} roas={<RoasCard value={roasValue(p.totals)} prev={roasValue(p.previousTotals)} currency={cur} />} />
+      {p.conversionTypes && (
+        <ConversionTypes rows={p.conversionTypes} total={p.conversionTypes.reduce((t, r) => t + r.conversions, 0)} currency={cur} />
+      )}
 
       <div className="chart-grid">
         <div>
