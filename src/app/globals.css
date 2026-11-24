@@ -872,3 +872,22 @@ input:focus-visible, select:focus-visible { box-shadow: 0 0 0 4px color-mix(in s
 .conv-type-bar { height: 6px; border-radius: 100px; background: var(--surface-3); overflow: hidden; margin-top: 4px; }
 .conv-type-bar span { display: block; height: 100%; border-radius: 100px; background: var(--brand-teal); animation: grow 0.8s var(--ease) both; }
 .conv-mini { display: block; font-size: 11.5px; color: var(--muted); font-weight: 500; }
+
+/* ---------- Cartões de indicadores: valor sempre cabe no cartão ---------- */
+/* O tamanho do número acompanha a largura do próprio cartão (container query). */
+.kpi { container-type: inline-size; min-width: 0; overflow: hidden; }
+.kpi-value {
+  font-size: clamp(1.05rem, 13cqi, 1.45rem);
+  line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.kpi-roas .kpi-value { font-size: clamp(1.4rem, 14cqi, 2rem); }
+.kpi-label { line-height: 1.3; min-height: 2.6em; align-items: flex-start; }
+.kpi-label .info-btn { margin-top: 1px; }
+.kpi-delta { line-height: 1.35; }
+/* Indicadores ao lado do ROAS: no máximo 4 por linha, para não ficarem estreitos demais. */
+@media (min-width: 1100px) {
+  .kpi-layout .kpi-grid { grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); }
+}
+@media (max-width: 1099px) {
+  .kpi-layout .kpi-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+}

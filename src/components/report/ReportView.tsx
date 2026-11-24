@@ -66,7 +66,9 @@ function KpiGrid({ items, roas }: { items: Kpi[]; roas?: React.ReactNode }) {
   if (!roas) return grid;
   // Colunas conforme a quantidade, para as linhas ficarem completas ao lado do ROAS.
   const n = items.length;
-  const cols = n <= 5 ? Math.max(n, 3) : n === 6 ? 3 : n % 5 === 0 ? 5 : 4;
+  // 3 ou 4 colunas (cartões largos o bastante para o valor), escolhendo a que deixa menos espaço vazio.
+  const empty = (c: number) => (c - (n % c)) % c;
+  const cols = n <= 3 ? 3 : empty(4) <= empty(3) ? 4 : 3;
   return (
     <div className="kpi-layout" style={{ "--cols": cols } as React.CSSProperties}>
       {roas}
