@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUser, homeFor } from "@/lib/auth";
 import Logo from "@/components/Logo";
-import ThemeToggle from "@/components/ThemeToggle";
+import AppearancePicker from "@/components/AppearancePicker";
 import LoginForm from "./LoginForm";
 
 export const metadata = { title: "Entrar" };
@@ -12,7 +12,7 @@ export default async function LoginPage() {
   if (user) redirect(homeFor(user));
   return (
     <div className="auth-wrap">
-      <div className="auth-theme"><ThemeToggle /></div>
+      <div className="auth-theme"><AppearancePicker /></div>
       <div className="auth-card stack">
         <Logo height={40} />
         <div>

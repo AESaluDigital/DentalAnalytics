@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { logoutAction } from "@/lib/actions/auth";
 import Logo from "./Logo";
-import ThemeToggle from "./ThemeToggle";
+import AppearancePicker from "./AppearancePicker";
 
 export interface NavItem {
   href: string;
@@ -75,7 +75,7 @@ export default function AppShell({ user, primary, items, demo, children }: Props
             ))}
           </nav>
           <div className="row top-right">
-            <ThemeToggle />
+            <AppearancePicker />
             <button type="button" className="user-chip" onClick={() => setOpen(true)} title={user.email}>
               <span className="user-avatar" aria-hidden>{user.name.trim().charAt(0).toUpperCase()}</span>
               <span className="user-chip-name">{user.name.split(" ")[0]}</span>
@@ -115,7 +115,7 @@ export default function AppShell({ user, primary, items, demo, children }: Props
             </div>
           </div>
           <div className="row">
-            <ThemeToggle withLabel />
+            <AppearancePicker withLabel />
             <form action={logoutAction}>
               <button className="btn" type="submit">Sair</button>
             </form>
