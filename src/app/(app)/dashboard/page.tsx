@@ -11,6 +11,9 @@ import ReportView from "@/components/report/ReportView";
 import type { ClientRow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+/** Gerar relatório consulta as plataformas e a análise da IA; na Vercel o padrão de tempo é curto demais. */
+export const maxDuration = 300;
+
 
 const CLIENT_COLS =
   "id, name, meta_ad_account_id, meta_conversion_action, google_ads_customer_id, ga4_property_id, active";

@@ -21,11 +21,11 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ provider: s
     return NextResponse.redirect(back);
   }
 
-  const { url, state, verifier } = startUrl(provider as Provider);
+  const { url, state, verifier, redirect } = startUrl(provider as Provider, req.nextUrl.origin);
   const res = NextResponse.redirect(url);
-  res.cookies.set(`oauth_${provider}`, JSON.stringify({ state, verifier, uid: user.id }), {
+  res.cookies.set(`oauth_${provider}`, JSON.stringify({ state, verifier, redirect, uid: user.id }), {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: req.nextUrl.protocol === "https:",
     sameSite: "lax",
     path: `/api/integrations/${provider}`,
     maxAge: 600,

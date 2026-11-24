@@ -23,8 +23,12 @@ export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/analytics.readonly",
 ];
 
-export function redirectUri(provider: Provider): string {
-  return new URL(`/api/integrations/${provider}/callback`, env().APP_URL).toString();
+/**
+ * URL de retorno do login. Usa o domínio pelo qual o app foi acessado (site publicado ou localhost),
+ * para o mesmo código funcionar nos dois. Cada endereço precisa estar cadastrado no Google/Meta.
+ */
+export function redirectUri(provider: Provider, origin: string = env().APP_URL): string {
+  return new URL(`/api/integrations/${provider}/callback`, origin).toString();
 }
 
 export function isConfigured(provider: Provider): { ok: boolean; missing: string[] } {
@@ -41,28 +45,30 @@ export interface OAuthStart {
   url: string;
   state: string;
   verifier: string;
+  redirect: string;
 }
 
-export function startUrl(provider: Provider): OAuthStart {
+export function startUrl(provider: Provider, origin: string): OAuthStart {
   const e = env();
   const state = randomBytes(24).toString("base64url");
   const verifier = randomBytes(32).toString("base64url");
+  const redirect = redirectUri(provider, origin);
 
   if (provider === "meta") {
     const u = new URL(`https://www.facebook.com/${e.META_API_VERSION}/dialog/oauth`);
     u.searchParams.set("client_id", e.META_APP_ID!);
-    u.searchParams.set("redirect_uri", redirectUri("meta"));
+    u.searchParams.set("redirect_uri", redirect);
     u.searchParams.set("state", state);
     u.searchParams.set("response_type", "code");
     if (e.META_LOGIN_CONFIG_ID) u.searchParams.set("config_id", e.META_LOGIN_CONFIG_ID);
     else u.searchParams.set("scope", META_SCOPES.join(","));
-    return { url: u.toString(), state, verifier };
+    return { url: u.toString(), state, verifier, redirect };
   }
 
   const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   u.search = new URLSearchParams({
     client_id: e.GOOGLE_CLIENT_ID!,
-    redirect_uri: redirectUri("google"),
+    redirect_uri: redirect,
     response_type: "code",
     scope: GOOGLE_SCOPES.join(" "),
     access_type: "offline",
@@ -72,7 +78,7 @@ export function startUrl(provider: Provider): OAuthStart {
     code_challenge: createHash("sha256").update(verifier).digest("base64url"),
     code_challenge_method: "S256",
   }).toString();
-  return { url: u.toString(), state, verifier };
+  return { url: u.toString(), state, verifier, redirect };
 }
 
 export interface OAuthResult {
@@ -84,7 +90,7 @@ export interface OAuthResult {
 }
 
 /* ---------------- Meta ---------------- */
-export async function finishMeta(code: string): Promise<OAuthResult> {
+export async function finishMeta(code: string, redirect: string): Promise<OAuthResult> {
   const e = env();
   const base = `https://graph.facebook.com/${e.META_API_VERSION}`;
   const P = "Meta Ads";
@@ -93,7 +99,7 @@ export async function finishMeta(code: string): Promise<OAuthResult> {
     P,
     `${base}/oauth/access_token?${new URLSearchParams({
       client_id: e.META_APP_ID!,
-      redirect_uri: redirectUri("meta"),
+      redirect_uri: redirect,
       client_secret: e.META_APP_SECRET!,
       code,
     })}`,
@@ -140,7 +146,7 @@ export async function revokeMeta(token: string): Promise<void> {
 }
 
 /* ---------------- Google ---------------- */
-export async function finishGoogle(code: string, verifier: string): Promise<OAuthResult> {
+export async function finishGoogle(code: string, verifier: string, redirect: string): Promise<OAuthResult> {
   const e = env();
   const P = "Google";
   const tok = await fetchJson<{ access_token: string; refresh_token?: string; scope?: string }>(
@@ -155,7 +161,7 @@ export async function finishGoogle(code: string, verifier: string): Promise<OAut
         code,
         code_verifier: verifier,
         grant_type: "authorization_code",
-        redirect_uri: redirectUri("google"),
+        redirect_uri: redirect,
       }),
     },
   );

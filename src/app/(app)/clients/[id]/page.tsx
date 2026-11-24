@@ -15,6 +15,9 @@ interface ReportListRow {
   has_analysis: boolean;
 }
 
+/** Gerar relatório consulta as plataformas e a análise da IA; na Vercel o padrão de tempo é curto demais. */
+export const maxDuration = 300;
+
 export default async function ClientPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   const id = Number((await params).id);

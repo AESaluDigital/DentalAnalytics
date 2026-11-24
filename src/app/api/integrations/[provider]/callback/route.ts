@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { getUser } from "@/lib/auth";
-import { finishGoogle, finishMeta } from "@/lib/oauth";
+import { finishGoogle, finishMeta, redirectUri } from "@/lib/oauth";
 import { saveIntegration, type Provider } from "@/lib/integrations";
 import { PlatformError } from "@/lib/platforms/http";
 import { clearDiscoveryCache } from "@/lib/platforms/discovery";
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ provider: s
     return fail(params.get("error_description") ?? "Conexão cancelada na plataforma.");
   }
 
-  let saved: { state: string; verifier: string; uid: number } | null = null;
+  let saved: { state: string; verifier: string; redirect?: string; uid: number } | null = null;
   try {
     saved = JSON.parse(req.cookies.get(`oauth_${provider}`)?.value ?? "null");
   } catch {
@@ -49,7 +49,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ provider: s
   }
 
   try {
-    const result = provider === "meta" ? await finishMeta(code) : await finishGoogle(code, saved.verifier);
+    // Mesmo endereço de retorno usado no início do login (Google/Meta exigem que seja idêntico).
+    const redirect = saved.redirect ?? redirectUri(provider as Provider, req.nextUrl.origin);
+    const result =
+      provider === "meta" ? await finishMeta(code, redirect) : await finishGoogle(code, saved.verifier, redirect);
     await saveIntegration({ provider: provider as Provider, ...result, userId: user.id });
   } catch (err) {
     if (!(err instanceof PlatformError)) console.error("[integrations] erro ao concluir conexão", err);

@@ -108,7 +108,8 @@ export async function generateAnalysis(data: ReportData): Promise<ReportAnalysis
   if (!e.ANTHROPIC_API_KEY) return null;
   if (data.meta.status !== "ok" && data.googleAds.status !== "ok" && data.ga4.status !== "ok") return null;
 
-  const client = new Anthropic({ apiKey: e.ANTHROPIC_API_KEY });
+  // Teto de tempo: se a análise demorar, o relatório sai sem ela em vez de estourar o limite da hospedagem.
+  const client = new Anthropic({ apiKey: e.ANTHROPIC_API_KEY, timeout: 120_000, maxRetries: 1 });
 
   try {
     const response = await client.beta.messages.create({

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth";
 import { env } from "@/lib/env";
@@ -134,10 +135,20 @@ async function Accounts({ meta, google }: { meta: boolean; google: boolean }) {
   );
 }
 
+/** Domínio pelo qual a página foi acessada (site publicado ou localhost). */
+async function requestOrigin(): Promise<string> {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  if (!host) return env().APP_URL;
+  const proto = h.get("x-forwarded-proto") ?? (/^(localhost|127.0.0.1)(:|$)/.test(host) ? "http" : "https");
+  return `${proto.split(",")[0]}://${host}`;
+}
+
 export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string }> }) {
   await requireAdmin();
   const sp = await searchParams;
   const e = env();
+  const origin = await requestOrigin();
   const list = await listIntegrations();
   const meta = list.find((i) => i.provider === "meta");
   const google = list.find((i) => i.provider === "google");
@@ -224,16 +235,20 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           <li>
             <strong>Meta:</strong> em developers.facebook.com, use (ou crie) um app do tipo <em>Empresa</em> vinculado ao Business
             Manager da SuperDental, adicione o produto <em>Login do Facebook para Empresas</em> e cadastre a URI de redirecionamento:
-            <code className="uri">{redirectUri("meta")}</code>
+            <code className="uri">{redirectUri("meta", origin)}</code>
             Preencha <code>META_APP_ID</code> e <code>META_APP_SECRET</code> no .env (e <code>META_LOGIN_CONFIG_ID</code> se usar uma
             configuração do Login para Empresas — nela marque <code>ads_read</code> e <code>business_management</code>). Quem for conectar precisa ser administrador/desenvolvedor do app.
           </li>
           <li>
             <strong>Google:</strong> no Google Cloud, ative Google Ads API, Analytics Data API e Analytics Admin API; crie um cliente
             OAuth do tipo <em>Aplicativo da Web</em> com a URI de redirecionamento:
-            <code className="uri">{redirectUri("google")}</code>
+            <code className="uri">{redirectUri("google", origin)}</code>
             Preencha <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>, <code>GOOGLE_ADS_DEVELOPER_TOKEN</code> e{" "}
             <code>GOOGLE_ADS_LOGIN_CUSTOMER_ID</code> (MCC).
+          </li>
+          <li>
+            O endereço acima é o deste ambiente ({origin}). Para usar no site publicado <strong>e</strong> no localhost, cadastre os dois
+            (ex.: <code>{redirectUri("google", e.APP_URL)}</code> e <code>{redirectUri("google", "http://localhost:3000")}</code>).
           </li>
           <li>Reinicie o servidor e clique em <em>Conectar</em> em cada plataforma.</li>
         </ol>
