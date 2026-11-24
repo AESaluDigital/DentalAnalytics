@@ -2,6 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { adsCols, type MetricCol } from "@/lib/metric-cols";
 import { METRIC_HELP } from "@/lib/metric-help";
 import type { AdsCampaignRow, AdsMetrics, MetaAdRow, MetaBreakdown } from "@/lib/types";
@@ -60,16 +61,23 @@ function Thumb({ ad, onOpen }: { ad: MetaAdRow; onOpen: () => void }) {
   );
 }
 
-/** Janela com a prévia do criativo. */
+/**
+ * Janela com a prévia do criativo. Renderizada direto no <body> (as seções do relatório usam
+ * content-visibility, que prenderia a janela dentro da seção) e com a rolagem do fundo travada.
+ */
 function Preview({ ad, onClose }: { ad: MetaAdRow; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    document.body.classList.add("no-scroll");
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.classList.remove("no-scroll");
+    };
   }, [onClose]);
   const c = ad.creative;
   const src = c?.image ?? c?.thumbnail ?? null;
-  return (
+  return createPortal(
     <div className="modal-backdrop" onClick={onClose} role="presentation">
       <div className="modal card" role="dialog" aria-modal="true" aria-label={`Prévia: ${ad.name}`} onClick={(e) => e.stopPropagation()}>
         <div className="row between" style={{ flexWrap: "nowrap" }}>
@@ -89,7 +97,8 @@ function Preview({ ad, onClose }: { ad: MetaAdRow; onClose: () => void }) {
           Prévia gerada pela Meta. Vídeos e carrosséis aparecem completos em &quot;Ver anúncio no Facebook&quot;.
         </p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
