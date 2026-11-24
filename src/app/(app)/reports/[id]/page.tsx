@@ -7,6 +7,7 @@ import { deleteReportAction, revokeShareAction, rotateShareAction } from "@/lib/
 import CopyLink from "@/components/CopyLink";
 import PrintButton from "@/components/PrintButton";
 import ReportView from "@/components/report/ReportView";
+import { hasSellbot } from "@/lib/platforms/sellbot";
 import type { ReportAnalysis, ReportData } from "@/lib/types";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -36,6 +37,8 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const shareUrl = new URL(`/r/${r.share_token}`, env().APP_URL).toString();
   const expired = r.share_expires_at !== null && r.share_expires_at < new Date();
   const shareActive = !r.share_revoked && !expired;
+  // Relatório salvo antes de o cliente conectar a Sellbot: avisa que um novo relatório traz as vendas.
+  const missingSales = r.data.sellbot?.status !== "ok" && r.data.sellbot?.status !== "error" && (await hasSellbot(r.client_id));
 
   return (
     <div className="stack">
@@ -83,6 +86,16 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
           </form>
         </div>
       </section>
+      )}
+
+      {missingSales && (
+        <p className="notice no-print" role="note">
+          Este relatório foi gerado antes de o cliente conectar a Sellbot, por isso não traz as vendas.{" "}
+          <Link href={`/reports?client=${r.client_id}&start=${r.data.range.start}&end=${r.data.range.end}`}>
+            Gere um novo relatório do mesmo período
+          </Link>{" "}
+          para incluir vendas, funis e UTMs.
+        </p>
       )}
 
       {!r.analysis && (

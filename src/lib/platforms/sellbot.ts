@@ -38,6 +38,8 @@ interface Deal {
   utm_source?: string | null;
   utm_medium?: string | null;
   utm_campaign?: string | null;
+  utm_term?: string | null;
+  utm_content?: string | null;
   lead_campaign?: string | null;
   meta_campaign_id?: string | null;
   meta_campaign_name?: string | null;
@@ -141,6 +143,13 @@ async function pipelineData(
       source: sourceOf(d),
       campaign: d.meta_campaign_name || d.utm_campaign || d.lead_campaign || null,
       metaCampaignId: d.meta_campaign_id || null,
+      utm: {
+        source: d.utm_source || null,
+        medium: d.utm_medium || null,
+        campaign: d.utm_campaign || null,
+        term: d.utm_term || null,
+        content: d.utm_content || null,
+      },
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -194,7 +203,8 @@ export async function saveSellbotConnection(clientId: number, token: string, use
 
 export async function setSellbotGlobalPipelines(clientId: number, ids: string[] | null): Promise<void> {
   await ensureSchema();
-  await query("UPDATE sellbot_connections SET global_pipelines = $1 WHERE client_id = $2", [ids, clientId]);
+  // connected_at também muda para invalidar o cache do dashboard em todos os servidores.
+  await query("UPDATE sellbot_connections SET global_pipelines = $1, connected_at = now() WHERE client_id = $2", [ids, clientId]);
 }
 
 export async function deleteSellbotConnection(clientId: number): Promise<void> {
@@ -231,4 +241,14 @@ export async function listSellbotConnections(): Promise<
      FROM sellbot_connections s LEFT JOIN users u ON u.id = s.connected_by`,
   );
   return new Map(rows.map((r) => [r.client_id, { connectedAt: r.connected_at, globalPipelines: r.global_pipelines, connectedBy: r.by }]));
+}
+
+/** Marca da conexão (muda ao conectar/trocar/alterar funis) — usada na chave de cache do dashboard. */
+export async function sellbotStamp(clientId: number): Promise<string> {
+  await ensureSchema();
+  const r = await queryOne<{ s: string }>(
+    "SELECT connected_at::text || coalesce(array_to_string(global_pipelines, ','), '*') AS s FROM sellbot_connections WHERE client_id = $1",
+    [clientId],
+  );
+  return r?.s ?? "-";
 }

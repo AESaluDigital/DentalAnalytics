@@ -136,6 +136,8 @@ export interface SellbotSale {
   campaign: string | null;
   /** ID da campanha da Meta, quando o lead veio de Lead Ads. */
   metaCampaignId: string | null;
+  /** UTMs brutas do negócio (ausentes em relatórios gerados antes desta versão). */
+  utm?: { source: string | null; medium: string | null; campaign: string | null; term: string | null; content: string | null };
 }
 
 export interface SellbotStage {

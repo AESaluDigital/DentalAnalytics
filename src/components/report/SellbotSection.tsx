@@ -118,6 +118,19 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
     return [...m.entries()].map(([campaign, x]) => ({ campaign, ...x })).sort((a, b) => b.value - a.value);
   }, [v.sales, campaigns]);
 
+  // Detalhe por combinação de UTMs (source / medium / campaign / term / content).
+  const byUtm = useMemo(() => {
+    const m = new Map<string, { u: NonNullable<(typeof v.sales)[number]["utm"]>; count: number; value: number }>();
+    for (const s of v.sales) {
+      const u = s.utm ?? { source: null, medium: null, campaign: null, term: null, content: null };
+      const k = [u.source, u.medium, u.campaign, u.term, u.content].join("|");
+      const x = m.get(k) ?? { u, count: 0, value: 0 };
+      m.set(k, { u, count: x.count + 1, value: x.value + s.value });
+    }
+    return [...m.values()].sort((a, b) => b.value - a.value);
+  }, [v.sales]);
+  const hasUtmData = v.sales.some((s) => s.utm);
+
   const unattributed = v.sales.filter((s) => s.source === "Não identificada" || s.source === "Formulário do site").length;
   const maxStage = Math.max(1, ...(pipeline?.stages.map((s) => s.count) ?? [1]));
 
@@ -265,6 +278,33 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
           )}
         </div>
       </div>
+
+      {hasUtmData && byUtm.length > 0 && (
+        <div>
+          <h3 className="chart-title">Vendas por UTM</h3>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>utm_source</th><th>utm_medium</th><th>utm_campaign</th><th>utm_term</th><th>utm_content</th>
+                  <th className="num">Vendas</th><th className="num">Faturamento</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byUtm.map(({ u, count, value }, i) => (
+                  <tr key={i}>
+                    {[u.source, u.medium, u.campaign, u.term, u.content].map((x, j) => (
+                      <td key={j} className={x ? undefined : "muted"}>{x ?? "—"}</td>
+                    ))}
+                    <td className="num">{int(count)}</td>
+                    <td className="num">{money(value, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {v.lostReasons.length > 0 && (
         <div>

@@ -7,7 +7,7 @@ import { getLiveData } from "@/lib/report/live";
 import { hasSellbot } from "@/lib/platforms/sellbot";
 import DashboardToolbar from "@/components/DashboardToolbar";
 import ReportView from "@/components/report/ReportView";
-import type { ClientRow } from "@/lib/types";
+import type { ClientRow, PlatformResult, ReportData } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 /** Consulta ao vivo das plataformas (Meta, Google Ads, GA4) pode passar do tempo padrão da Vercel. */
@@ -25,7 +25,29 @@ function resolveRange(start: string | undefined, end: string | undefined, today:
   return { start, end };
 }
 
-async function LiveData({ client, start, end, force, canExport }: { client: ClientRow; start: string; end: string; force: boolean; canExport: boolean }) {
+/** Faixa com o estado de cada fonte de dados do cliente (conectada, com erro ou não vinculada). */
+function Sources({ data, clientId, canManage }: { data: ReportData; clientId: number; canManage: boolean }) {
+  const items: [string, PlatformResult<unknown> | undefined, string][] = [
+    ["Meta Ads", data.meta, `/clients/${clientId}/edit`],
+    ["Google Ads", data.googleAds, `/clients/${clientId}/edit`],
+    ["GA4", data.ga4, `/clients/${clientId}/edit`],
+    ["Sellbot", data.sellbot, "/settings/sellbot"],
+  ];
+  return (
+    <div className="sources no-print" aria-label="Fontes de dados">
+      {items.map(([name, r, href]) => {
+        const st = r?.status ?? "not_configured";
+        const label = st === "ok" ? "conectada" : st === "error" ? "erro" : "não vinculada";
+        const chip = <span className={`source source-${st}`} title={r?.status === "error" ? r.message : undefined}>
+          <i aria-hidden /> {name}: {label}
+        </span>;
+        return st === "not_configured" && canManage ? <Link key={name} href={href}>{chip}</Link> : <span key={name}>{chip}</span>;
+      })}
+    </div>
+  );
+}
+
+async function LiveData({ client, start, end, force, canExport, canManage }: { client: ClientRow; start: string; end: string; force: boolean; canExport: boolean; canManage: boolean }) {
   const { data, fetchedAt } = await getLiveData(client, { start, end }, force);
   return (
     <>
@@ -41,6 +63,7 @@ async function LiveData({ client, start, end, force, canExport }: { client: Clie
           </Link>
         )}
       </div>
+      <Sources data={data} clientId={client.id} canManage={canManage} />
       <ReportView data={data} analysis={null} />
     </>
   );
@@ -94,7 +117,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
             </div>
           }
         >
-          <LiveData client={client} start={start} end={end} force={Boolean(sp.refresh)} canExport={can(user, "export_reports")} />
+          <LiveData client={client} start={start} end={end} force={Boolean(sp.refresh)} canExport={can(user, "export_reports")}
+            canManage={can(user, "manage_clients") || can(user, "manage_integrations")} />
         </Suspense>
       )}
     </div>
