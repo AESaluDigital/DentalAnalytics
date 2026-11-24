@@ -891,3 +891,4 @@ input:focus-visible, select:focus-visible { box-shadow: 0 0 0 4px color-mix(in s
 @media (max-width: 1099px) {
   .kpi-layout .kpi-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
 }
+.badge.danger-badge { color: var(--bad); border-color: var(--bad); background: transparent; }

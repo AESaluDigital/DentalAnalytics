@@ -32,7 +32,12 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
           <span className="eyebrow">Carteira</span>
           <h1>Clientes</h1>
         </div>
-        {can(user, "manage_clients") && <Link className="btn primary" href="/clients/new">+ Novo cliente</Link>}
+        {can(user, "manage_clients") && (
+          <div className="row">
+            <Link className="btn" href="/clients/import">Importar planilha</Link>
+            <Link className="btn primary" href="/clients/new">+ Novo cliente</Link>
+          </div>
+        )}
       </div>
 
       <form className="card row" role="search" style={{ padding: 14 }}>
