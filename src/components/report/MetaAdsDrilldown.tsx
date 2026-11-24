@@ -98,6 +98,15 @@ export default function MetaAdsDrilldown({ campaigns, breakdown, currency, total
   const [openCampaigns, setOpenCampaigns] = useState<Set<string>>(new Set());
   const [openSets, setOpenSets] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState<MetaAdRow | null>(null);
+  const [view, setView] = useState<"tree" | "ads">("tree");
+  const [filter, setFilter] = useState("");
+  const campaignName = useMemo(() => new Map(campaigns.map((c) => [c.id, c.name])), [campaigns]);
+  const setName = useMemo(() => new Map((breakdown?.adSets ?? []).map((s) => [s.id, s.name])), [breakdown]);
+  const adList = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    const list = [...(breakdown?.ads ?? [])].sort((x, y) => y.spend - x.spend);
+    return q ? list.filter((a) => a.name.toLowerCase().includes(q) || (a.creative?.title ?? "").toLowerCase().includes(q)) : list;
+  }, [breakdown, filter]);
 
   const setsByCampaign = useMemo(() => groupBy(breakdown?.adSets ?? [], (s) => s.campaignId), [breakdown]);
   const adsBySet = useMemo(() => groupBy(breakdown?.ads ?? [], (a) => a.adSetId), [breakdown]);
@@ -120,15 +129,69 @@ export default function MetaAdsDrilldown({ campaigns, breakdown, currency, total
 
   if (campaigns.length === 0) return <p className="muted">Nenhuma campanha com entrega no período.</p>;
   const hasBreakdown = Boolean(breakdown && breakdown.adSets.length);
+  const nAds = breakdown?.ads.length ?? 0;
 
   return (
     <div className="stack drill">
-      {hasBreakdown && (
-        <div className="row no-print" style={{ justifyContent: "flex-end" }}>
-          <button type="button" className="btn" onClick={expandAll}>Expandir tudo</button>
-          <button type="button" className="btn" onClick={collapseAll}>Recolher tudo</button>
+      {breakdown?.notes.map((n) => <p key={n} className="notice err small" role="status">⚠ {n}</p>)}
+      <div className="row between no-print">
+        <div className="seg" role="group" aria-label="Visualização">
+          <button type="button" className="btn" aria-pressed={view === "tree"} onClick={() => setView("tree")}>
+            Campanhas › Conjuntos › Anúncios
+          </button>
+          <button type="button" className="btn" aria-pressed={view === "ads"} onClick={() => setView("ads")} disabled={!nAds}>
+            Anúncios com prévia ({nAds})
+          </button>
         </div>
-      )}
+        {view === "tree" && hasBreakdown && (
+          <div className="row">
+            <button type="button" className="btn" onClick={expandAll}>Expandir tudo</button>
+            <button type="button" className="btn" onClick={collapseAll}>Recolher tudo</button>
+          </div>
+        )}
+        {view === "ads" && (
+          <input type="search" placeholder="Filtrar anúncio…" value={filter} onChange={(e) => setFilter(e.target.value)}
+            aria-label="Filtrar anúncios" style={{ flex: "0 1 280px" }} />
+        )}
+      </div>
+      {view === "ads" ? (
+        <div className="table-wrap">
+          <table className="tree tree-meta">
+            <thead>
+              <tr>
+                <th>Anúncio</th>
+                {cols.map((c) => (
+                  <th key={c.key} className="num">
+                    <span className="th-help">{c.label}<InfoTip label={c.label} text={METRIC_HELP[c.help]} /></span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {adList.map((a) => (
+                <tr key={a.id}>
+                  <td className="name">
+                    <span className="tree-cell ad-cell">
+                      <Thumb ad={a} onOpen={() => setPreview(a)} />
+                      <span>
+                        {a.name}
+                        <span className="tree-count">
+                          {a.campaignName ?? campaignName.get(a.campaignId) ?? "—"} › {a.adSetName ?? setName.get(a.adSetId) ?? "—"}
+                        </span>
+                        {(a.creative?.thumbnail || a.creative?.image || a.creative?.previewLink) && (
+                          <button type="button" className="link-btn small no-print" onClick={() => setPreview(a)}>ver prévia</button>
+                        )}
+                      </span>
+                    </span>
+                  </td>
+                  <MetricCells cols={cols} m={a} />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {adList.length === 0 && <p className="muted">Nenhum anúncio encontrado.</p>}
+        </div>
+      ) : (
       <div className="table-wrap">
         <table className="tree tree-meta">
           <thead>
@@ -204,13 +267,13 @@ export default function MetaAdsDrilldown({ campaigns, breakdown, currency, total
           </tbody>
         </table>
       </div>
+      )}
       {campaigns.length > 50 && <p className="muted small">Exibindo as 50 campanhas com maior investimento de {campaigns.length}.</p>}
       {!breakdown && (
         <p className="muted small">
           Este relatório foi gerado antes do detalhamento por conjuntos e anúncios. Gere um novo para ver.
         </p>
       )}
-      {breakdown?.notes.map((n) => <p key={n} className="muted small">ⓘ {n}</p>)}
       {preview && <Preview ad={preview} onClose={() => setPreview(null)} />}
     </div>
   );

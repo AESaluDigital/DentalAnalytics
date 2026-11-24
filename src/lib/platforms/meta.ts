@@ -178,7 +178,7 @@ async function fetchMetaBreakdown(accountId: string, conversionAction: string, r
       insights(accountId, { level: "adset", time_range: timeRange(range), fields: `campaign_id,adset_id,adset_name,${fields}`, sort: "spend_descending", limit: "500" }),
     ),
     soft("os anúncios", () =>
-      insights(accountId, { level: "ad", time_range: timeRange(range), fields: `campaign_id,adset_id,ad_id,ad_name,${fields}`, sort: "spend_descending", limit: "500" }),
+      insights(accountId, { level: "ad", time_range: timeRange(range), fields: `campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,${fields}`, sort: "spend_descending", limit: "500" }),
     ),
   ]);
 
@@ -190,14 +190,30 @@ async function fetchMetaBreakdown(accountId: string, conversionAction: string, r
     return new Map<string, MetaCreative>();
   });
 
+  // Se a consulta de conjuntos falhar, monta os conjuntos somando os anúncios (que trazem o nome do conjunto).
+  let adSetRows: MetaAdSetRow[] = sets
+    .filter((r) => num(r.impressions) > 0)
+    .map<MetaAdSetRow>((r) => ({ id: r.adset_id ?? "", campaignId: r.campaign_id ?? "", name: r.adset_name ?? "(sem nome)", ...metricsOf(r, conversionAction) }));
+  if (!adSetRows.length && withDelivery.length) {
+    const m = new Map<string, MetaAdSetRow>();
+    for (const r of withDelivery) {
+      const id = r.adset_id ?? "";
+      const x = m.get(id) ?? { id, campaignId: r.campaign_id ?? "", name: r.adset_name ?? "(sem nome)", spend: 0, impressions: 0, clicks: 0, conversions: 0, conversionValue: 0 };
+      const k = metricsOf(r, conversionAction);
+      x.spend += k.spend; x.impressions += k.impressions; x.clicks += k.clicks; x.conversions += k.conversions; x.conversionValue += k.conversionValue;
+      m.set(id, x);
+    }
+    adSetRows = [...m.values()].sort((a, b) => b.spend - a.spend);
+  }
+
   return {
-    adSets: sets
-      .filter((r) => num(r.impressions) > 0)
-      .map<MetaAdSetRow>((r) => ({ id: r.adset_id ?? "", campaignId: r.campaign_id ?? "", name: r.adset_name ?? "(sem nome)", ...metricsOf(r, conversionAction) })),
+    adSets: adSetRows,
     ads: topAds.map<MetaAdRow>((r) => ({
       id: r.ad_id ?? "",
       campaignId: r.campaign_id ?? "",
       adSetId: r.adset_id ?? "",
+      adSetName: r.adset_name,
+      campaignName: r.campaign_name,
       name: r.ad_name ?? "(sem nome)",
       creative: previews.get(r.ad_id ?? "") ?? null,
       ...metricsOf(r, conversionAction),

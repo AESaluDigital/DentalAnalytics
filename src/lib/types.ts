@@ -97,6 +97,9 @@ export interface MetaAdRow extends AdsMetrics {
   id: string;
   campaignId: string;
   adSetId: string;
+  /** Nome do conjunto (para montar a cascata mesmo se a consulta de conjuntos falhar). */
+  adSetName?: string;
+  campaignName?: string;
   name: string;
   creative: MetaCreative | null;
 }
