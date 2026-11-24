@@ -33,7 +33,7 @@ function StatusCard({
   const expired = daysLeft !== null && daysLeft < 0;
 
   return (
-    <section className="card stack" style={{ gap: 14 }}>
+    <section className="card stack status-card" style={{ gap: 14 }}>
       <div className="row between">
         <h2 className="section-title">
           <span className="swatch" style={{ background: color }} aria-hidden /> {title}
@@ -248,7 +248,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           </li>
           <li>
             O endereço acima é o deste ambiente ({origin}). Para usar no site publicado <strong>e</strong> no localhost, cadastre os dois
-            (ex.: <code>{redirectUri("google", e.APP_URL)}</code> e <code>{redirectUri("google", "http://localhost:3000")}</code>).
+            (ex.: <code>{redirectUri("google", e.APP_URL)}</code> e <code>{redirectUri("google", "http://localhost:3001")}</code>).
           </li>
           <li>Reinicie o servidor e clique em <em>Conectar</em> em cada plataforma.</li>
         </ol>

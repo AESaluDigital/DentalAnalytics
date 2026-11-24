@@ -33,40 +33,75 @@ function shareExpiry(): Date | null {
   return days > 0 ? new Date(Date.now() + days * 86_400_000) : null;
 }
 
-export async function generateReportAction(_prev: GenerateState, form: FormData): Promise<GenerateState> {
-  const user = await requirePermission("export_reports");
+type Created = { ok: true; id: string } | { ok: false; error: string };
 
-  const clientId = Number(form.get("clientId"));
-  const start = String(form.get("start") ?? "");
-  const end = String(form.get("end") ?? "");
-
-  if (!Number.isInteger(clientId)) return { error: "Cliente inválido." };
-  if (!isIsoDate(start) || !isIsoDate(end)) return { error: "Datas inválidas." };
-  if (end < start) return { error: "A data final deve ser igual ou posterior à inicial." };
-  if (end > todayIso()) return { error: "A data final não pode estar no futuro." };
-  if (daysBetween({ start, end }) > MAX_DAYS) return { error: `Período máximo: ${MAX_DAYS} dias.` };
+/** Valida, consulta as plataformas, gera a análise (opcional) e salva o relatório. */
+async function createReport(
+  userId: number,
+  clientId: number,
+  start: string,
+  end: string,
+  withAnalysis: boolean,
+): Promise<Created> {
+  if (!Number.isInteger(clientId)) return { ok: false, error: "Cliente inválido." };
+  if (!isIsoDate(start) || !isIsoDate(end)) return { ok: false, error: "Datas inválidas." };
+  if (end < start) return { ok: false, error: "A data final deve ser igual ou posterior à inicial." };
+  if (end > todayIso()) return { ok: false, error: "A data final não pode estar no futuro." };
+  if (daysBetween({ start, end }) > MAX_DAYS) return { ok: false, error: `Período máximo: ${MAX_DAYS} dias.` };
 
   const client = await queryOne<ClientRow>(
     `SELECT id, name, meta_ad_account_id, meta_conversion_action, google_ads_customer_id, ga4_property_id, active
      FROM clients WHERE id = $1`,
     [clientId],
   );
-  if (!client) return { error: "Cliente não encontrado." };
+  if (!client) return { ok: false, error: "Cliente não encontrado." };
   if (!client.meta_ad_account_id && !client.google_ads_customer_id && !client.ga4_property_id) {
-    return { error: "Este cliente não tem nenhuma conta vinculada." };
+    return { ok: false, error: "Sem nenhuma conta vinculada." };
   }
 
   const data = await buildReportData(client, { start, end });
-  const analysis = await generateAnalysis(data);
+  const analysis = withAnalysis ? await generateAnalysis(data) : null;
 
   const row = await queryOne<{ id: string }>(
     `INSERT INTO reports (client_id, period_start, period_end, data, analysis, share_token, share_expires_at, created_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-    [client.id, start, end, JSON.stringify(data), analysis ? JSON.stringify(analysis) : null, newShareToken(), shareExpiry(), user.id],
+    [client.id, start, end, JSON.stringify(data), analysis ? JSON.stringify(analysis) : null, newShareToken(), shareExpiry(), userId],
   );
-
   revalidatePath(`/clients/${client.id}`);
-  redirect(`/reports/${row!.id}`);
+  revalidatePath("/reports");
+  return { ok: true, id: row!.id };
+}
+
+export async function generateReportAction(_prev: GenerateState, form: FormData): Promise<GenerateState> {
+  const user = await requirePermission("export_reports");
+  const res = await createReport(
+    user.id,
+    Number(form.get("clientId")),
+    String(form.get("start") ?? ""),
+    String(form.get("end") ?? ""),
+    true,
+  );
+  if (!res.ok) return { error: res.error };
+  redirect(`/reports/${res.id}`);
+}
+
+/**
+ * Geração em massa: a tela Relatórios chama esta ação uma vez por cliente (poucas em paralelo),
+ * assim cada chamada fica dentro do limite de tempo da hospedagem.
+ */
+export async function generateOneReportAction(
+  clientId: number,
+  start: string,
+  end: string,
+  withAnalysis: boolean,
+): Promise<Created> {
+  const user = await requirePermission("export_reports");
+  try {
+    return await createReport(user.id, clientId, start, end, withAnalysis);
+  } catch (err) {
+    console.error("[reports] falha na geração em massa", err);
+    return { ok: false, error: "Falha inesperada ao gerar." };
+  }
 }
 
 export async function rotateShareAction(form: FormData): Promise<void> {

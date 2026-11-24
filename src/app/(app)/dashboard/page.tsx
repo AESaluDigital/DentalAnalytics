@@ -5,14 +5,12 @@ import { query, queryOne } from "@/lib/db";
 import { addDays, daysBetween, isIsoDate, todayIso } from "@/lib/dates";
 import { getLiveData } from "@/lib/report/live";
 import DashboardToolbar from "@/components/DashboardToolbar";
-import SnapshotButton from "@/components/SnapshotButton";
-import PrintButton from "@/components/PrintButton";
 import ReportView from "@/components/report/ReportView";
 import type { ClientRow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-/** Gerar relatório consulta as plataformas e a análise da IA; na Vercel o padrão de tempo é curto demais. */
-export const maxDuration = 300;
+/** Consulta ao vivo das plataformas (Meta, Google Ads, GA4) pode passar do tempo padrão da Vercel. */
+export const maxDuration = 120;
 
 const CLIENT_COLS =
   "id, name, meta_ad_account_id, meta_conversion_action, google_ads_customer_id, ga4_property_id, active";
@@ -36,10 +34,10 @@ async function LiveData({ client, start, end, force, canExport }: { client: Clie
           {new Date(fetchedAt).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo" })}
         </span>
         {canExport && (
-          <div className="row">
-            <PrintButton />
-            <SnapshotButton clientId={client.id} start={start} end={end} />
-          </div>
+          // Dashboard é só visualização; relatórios (inclusive em massa) são gerados na tela Relatórios.
+          <Link className="btn" href={`/reports?client=${client.id}&start=${start}&end=${end}`}>
+            Gerar relatório na tela Relatórios →
+          </Link>
         )}
       </div>
       <ReportView data={data} analysis={null} />

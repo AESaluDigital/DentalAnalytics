@@ -28,14 +28,14 @@ export default function GenerateReportForm({ clientId, today }: { clientId: numb
     <form action={action} className="card stack">
       <h2>Gerar relatório</h2>
       <input type="hidden" name="clientId" value={clientId} />
-      <div className="row">
+      <div className="seg" role="group" aria-label="Período">
         {options.map((p) => {
           const active = p.start === range.start && p.end === range.end;
           return (
             <button
               key={p.label}
               type="button"
-              className={`btn${active ? " primary" : ""}`}
+              className="btn"
               aria-pressed={active}
               onClick={() => setRange({ start: p.start, end: p.end })}
             >
@@ -44,7 +44,7 @@ export default function GenerateReportForm({ clientId, today }: { clientId: numb
           );
         })}
       </div>
-      <div className="row">
+      <div className="field-row">
         <label>
           Início
           <input type="date" name="start" required value={range.start} max={range.end}

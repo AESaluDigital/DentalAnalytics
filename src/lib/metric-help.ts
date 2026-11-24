@@ -10,6 +10,7 @@ export const METRIC_HELP = {
   cpc: "Custo por clique: quanto, em média, cada clique custou (investimento ÷ cliques). Quanto menor, melhor.",
   cpm: "Custo por mil impressões: quanto custou mostrar o anúncio 1.000 vezes. Quanto menor, melhor.",
   conversions: "Ações importantes feitas depois do anúncio — contato, agendamento, formulário ou mensagem —, conforme configurado na plataforma.",
+  cpl: "Custo por lead (CPL): quanto custou, em média, cada lead/contato gerado (investimento ÷ conversões). Quanto menor, melhor.",
   cpa: "Custo por conversão: quanto custou, em média, cada contato/agendamento (investimento ÷ conversões). Quanto menor, melhor.",
   conversionRate: "Taxa de conversão: de cada 100 cliques, quantos viraram conversão (conversões ÷ cliques).",
   conversionValue: "Valor em dinheiro atribuído às conversões (ex.: valor do tratamento), quando configurado na plataforma.",

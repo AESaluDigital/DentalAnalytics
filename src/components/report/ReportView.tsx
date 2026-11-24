@@ -6,6 +6,7 @@ import { METRIC_HELP, type MetricKey } from "@/lib/metric-help";
 import type { AdsPlatformData, Ga4Data, PlatformResult, ReportAnalysis, ReportData } from "@/lib/types";
 import { CategoryBarChart, DailyBarChart, DailyLineChart } from "./Charts";
 import GoogleAdsDrilldown from "./GoogleAdsDrilldown";
+import MainChart from "./MainChart";
 import InfoTip from "../InfoTip";
 import Logo from "../Logo";
 
@@ -48,9 +49,8 @@ function Delta({ change, lowerIsBetter, prevText }: { change: number | null; low
 }
 
 function KpiGrid({ items, roas }: { items: Kpi[]; roas?: React.ReactNode }) {
-  return (
+  const grid = (
     <div className="kpi-grid">
-      {roas}
       {items.map((k, i) => (
         <div key={k.label} className="kpi" style={{ "--i": i + (roas ? 1 : 0) } as React.CSSProperties}>
           <span className="kpi-label">{k.label}<InfoTip label={k.label} text={METRIC_HELP[k.help]} /></span>
@@ -58,6 +58,17 @@ function KpiGrid({ items, roas }: { items: Kpi[]; roas?: React.ReactNode }) {
           <Delta change={k.change} lowerIsBetter={k.lowerIsBetter} />
         </div>
       ))}
+    </div>
+  );
+  // ROAS fica numa coluna própria à esquerda; os demais indicadores formam uma grade alinhada à direita.
+  if (!roas) return grid;
+  // Colunas conforme a quantidade, para as linhas ficarem completas ao lado do ROAS.
+  const n = items.length;
+  const cols = n <= 5 ? Math.max(n, 3) : n === 6 ? 3 : n % 5 === 0 ? 5 : 4;
+  return (
+    <div className="kpi-layout" style={{ "--cols": cols } as React.CSSProperties}>
+      {roas}
+      {grid}
     </div>
   );
 }
@@ -341,13 +352,6 @@ function Overview({ data }: { data: ReportData }) {
       : []),
   ];
 
-  // Série combinada de investimento diário por canal
-  const daily = paid[0].p.daily.map((d, i) => {
-    const row: Record<string, number | string> = { date: d.date };
-    for (const x of paid) row[x.key] = x.p.daily[i]?.spend ?? 0;
-    return row;
-  });
-
   return (
     <section className="card report-section">
       <h2>Visão geral — mídia paga</h2>
@@ -355,16 +359,10 @@ function Overview({ data }: { data: ReportData }) {
         roas={showRoas ? <RoasCard value={roasValue(total)} prev={roasValue(totalPrev)} currency={currency} /> : undefined} />
 
       <div className="stack">
-        {sameCurrency && (
-          <div>
-            <h3 className="chart-title">Investimento diário por canal</h3>
-            <DailyLineChart
-              data={daily}
-              series={paid.map((x) => ({ key: x.key, label: x.label, color: x.color }))}
-              format="money"
-              currency={currency}
-            />
-          </div>
+        {sameCurrency ? (
+          <MainChart currency={currency} channels={paid.map((x) => ({ key: x.key, label: x.label, daily: x.p.daily }))} />
+        ) : (
+          <p className="muted small">Os canais usam moedas diferentes; o gráfico combinado não é exibido.</p>
         )}
         <div>
           <h3 className="chart-title">Comparativo por canal</h3>

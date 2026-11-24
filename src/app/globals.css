@@ -620,3 +620,94 @@ code.uri { display: block; margin: 6px 0; padding: 8px 10px; overflow-x: auto; w
 @media print {
   .report > .report-section { content-visibility: visible; }
 }
+
+/* =========================================================================
+   Alinhamento (todas as telas): mesma altura para campos e botões, grades
+   consistentes e espaçamentos regulares.
+   ========================================================================= */
+:root { --control-h: 40px; }
+
+input[type="text"], input[type="email"], input[type="password"], input[type="date"], input[type="search"], select {
+  height: var(--control-h);
+  padding-top: 0; padding-bottom: 0;
+}
+.btn { min-height: var(--control-h); padding-top: 0; padding-bottom: 0; }
+.btn.icon { min-width: var(--control-h); justify-content: center; }
+.seg .btn { min-height: calc(var(--control-h) - 8px); }
+.small-seg .btn, .small-btn { min-height: 30px; padding: 0 12px; font-size: 12.5px; }
+.tree-toggle { min-height: 0; }
+.seg { align-items: center; }
+/* Botões e segmentos não esticam dentro de colunas */
+.stack > .seg, .stack > .btn, .stack > .row > .seg { align-self: flex-start; }
+.row > label:not(.checkbox):not(.bulk-item) { flex: 1 1 180px; }
+.row > input[type="search"], .row > select { flex: 1 1 240px; }
+
+/* Formulários em grade: rótulos no topo, campos na mesma linha de base */
+.grid-form { align-items: end; }
+.grid-form > .row { align-items: flex-end; min-height: var(--control-h); }
+.field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; align-items: end; }
+.field-label { font-weight: 600; font-size: 13px; color: var(--ink); }
+
+/* Cabeçalhos de cartão e de página */
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.card-head p { margin: 4px 0 0; }
+.card > h2:first-child { margin-bottom: 4px; }
+.page-head h1 + p { margin-top: 6px; }
+.page-head > h2 { padding-top: 6px; }
+
+/* Indicadores: ROAS em coluna própria + grade alinhada */
+.kpi-layout { display: grid; grid-template-columns: minmax(260px, 320px) 1fr; gap: 12px; align-items: stretch; }
+.kpi-layout .kpi-roas { grid-column: auto; }
+.kpi-grid { grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); align-items: stretch; }
+.kpi { justify-content: flex-start; min-height: 96px; }
+@media (max-width: 860px) { .kpi-layout { grid-template-columns: 1fr; } }
+
+/* Gráfico principal */
+.chart-stats { display: flex; flex-wrap: wrap; gap: 10px 28px; }
+.chart-stats > div { display: flex; flex-direction: column; gap: 2px; }
+.chart-stats strong { font-family: var(--font-disp); font-size: 1.25rem; font-weight: 800; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; flex: none; }
+.dot.dash { height: 3px; border-radius: 2px; width: 14px; }
+
+/* Geração em massa */
+.bulk-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 900px) { .bulk-grid { grid-template-columns: 1fr; } }
+.bulk-list {
+  max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); padding: 4px;
+}
+.bulk-item {
+  flex-direction: row; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px;
+  font-weight: 500; cursor: pointer; min-height: 38px;
+}
+.bulk-item:hover { background: var(--surface-2); }
+.bulk-item.off { opacity: 0.55; cursor: default; }
+.bulk-item input { accent-color: var(--brand-teal); width: 16px; height: 16px; flex: none; margin: 0; }
+.bulk-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bulk-item .error { max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.progress { height: 8px; border-radius: 100px; background: var(--surface-3); overflow: hidden; }
+.progress span { display: block; height: 100%; border-radius: 100px; transition: width 0.4s var(--ease);
+  background: linear-gradient(90deg, var(--brand-teal), var(--brand-teal-hi)); }
+.spinner {
+  width: 16px; height: 16px; border-radius: 50%; flex: none; display: inline-block;
+  border: 2px solid var(--surface-3); border-top-color: var(--brand-teal); animation: spin 0.8s linear infinite;
+}
+
+/* Tabelas: última coluna de ações alinhada à direita */
+td:last-child > .btn:only-child, td:last-child > a.btn { float: right; }
+
+/* Campos com texto de ajuda abaixo: alinhados pelo topo (rótulo e campo na mesma linha). */
+.grid-form { align-items: start; }
+.grid-form > .row, .grid-form > .form-actions { align-self: end; }
+label .hint { overflow-wrap: anywhere; line-height: 1.4; }
+.form-actions { display: flex; gap: 10px; align-items: center; min-height: var(--control-h); }
+
+/* Ações de tabela à direita */
+td:last-child > .btn:only-child, td:last-child > a.btn { float: none; }
+td.actions { text-align: right; }
+
+/* Cartões de integração lado a lado: botões sempre no rodapé, na mesma altura */
+.status-card > .row:last-child { margin-top: auto; }
+@media (min-width: 1100px) {
+  .kpi-layout .kpi-grid { grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); }
+}

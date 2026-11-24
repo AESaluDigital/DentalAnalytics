@@ -2,7 +2,7 @@
 
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
-import { createSession, destroySession, homeFor, verifyCredentials } from "../auth";
+import { createSession, destroySession, homeFor, isMasterLogin, verifyCredentials } from "../auth";
 import { ensureUserColumns, query, queryOne } from "../db";
 import { DEFAULT_PERMISSIONS } from "../permissions";
 
@@ -56,6 +56,8 @@ export async function signupAction(_prev: SignupState, form: FormData): Promise<
   if (password.length > 200) return { error: "Senha longa demais." };
   if (password !== confirm) return { error: "As senhas não conferem." };
 
+  // Logins master só são criados por quem já é master (tela Usuários), nunca pelo cadastro público.
+  if (isMasterLogin(login)) return { error: "Este usuário/e-mail já está cadastrado." };
   await ensureUserColumns();
   const exists = await queryOne("SELECT 1 FROM users WHERE email = $1", [login]);
   if (exists) return { error: "Este usuário/e-mail já está cadastrado." };

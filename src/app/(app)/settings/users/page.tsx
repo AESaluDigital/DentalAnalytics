@@ -94,10 +94,10 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
             <input type="text" name="login" required autoCapitalize="none" spellCheck={false} maxLength={200} />
           </label>
           <label>
-            Senha inicial <span className="hint">mín. 8 caracteres</span>
-            <input type="password" name="password" required minLength={8} autoComplete="new-password" />
+            Senha inicial
+            <input type="password" name="password" required minLength={8} autoComplete="new-password" placeholder="mín. 8 caracteres" />
           </label>
-          <div className="row" style={{ alignItems: "flex-end" }}>
+          <div className="form-actions">
             <button className="btn primary" type="submit">Criar com permissões padrão</button>
           </div>
         </form>

@@ -46,7 +46,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="stack">
-      <div className="row between">
+      <div className="page-head">
         <div>
           <Link href="/" className="small back-link">← Clientes</Link>
           <h1>{client.name}</h1>
@@ -93,7 +93,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
                     <td>{r.created_at.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</td>
                     <td>{r.author ?? "—"}</td>
                     <td>{r.has_analysis ? "sim" : <span className="muted">indisponível</span>}</td>
-                    <td><Link href={`/reports/${r.id}`}>Abrir</Link></td>
+                    <td className="actions"><Link className="btn small-btn" href={`/reports/${r.id}`}>Abrir</Link></td>
                   </tr>
                 ))}
               </tbody>

@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
   LineChart,
@@ -161,6 +162,56 @@ export function CategoryBarChart({
           <Tooltip {...tooltipStyle} cursor={{ fill: "var(--surface-2)" }} formatter={(v) => fmt(Number(v))} />
           <Bar dataKey={dataKey} name={label} fill={color} radius={[0, 4, 4, 0]} isAnimationActive={false} />
         </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/** Gráfico principal: investimento e CPL (linhas, eixo R$) + conversões (barras, eixo direito). */
+export function SpendConvCplChart({
+  data,
+  currency = "BRL",
+  height = 300,
+  colors,
+}: {
+  data: { date: string; spend: number; conversions: number; cpl: number | null }[];
+  currency?: string;
+  height?: number;
+  colors: { spend: string; conversions: string; cpl: string };
+}) {
+  const money = makeFormatter("money", currency);
+  const moneyFine = new Intl.NumberFormat("pt-BR", { style: "currency", currency });
+  const ints = makeFormatter("int", currency);
+  return (
+    <div style={{ width: "100%", height }}>
+      <ResponsiveContainer>
+        <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barCategoryGap={3}>
+          <CartesianGrid stroke="var(--grid)" vertical={false} />
+          <XAxis dataKey="date" tickFormatter={dayLabel} minTickGap={24} {...axisProps} />
+          <YAxis yAxisId="money" tickFormatter={(v: number) => compact.format(v)} width={52} axisLine={false} {...axisProps} />
+          <YAxis yAxisId="conv" orientation="right" tickFormatter={(v: number) => compact.format(v)} width={40}
+            axisLine={false} allowDecimals={false} {...axisProps} />
+          {/* CPL tem escala própria (valores bem menores que o investimento); eixo oculto, valor no tooltip. */}
+          <YAxis yAxisId="cpl" hide domain={[0, (max: number) => max * 1.15]} />
+          <Tooltip
+            {...tooltipStyle}
+            cursor={{ fill: "var(--surface-2)" }}
+            labelFormatter={(l) => dayLabel(String(l))}
+            formatter={(v, name) => {
+              if (v === null || v === undefined) return ["—", name];
+              if (name === "Conversões") return [ints(Number(v)), name];
+              return [name === "CPL" ? moneyFine.format(Number(v)) : money(Number(v)), name];
+            }}
+          />
+          <Legend wrapperStyle={{ color: "var(--ink-2)", fontSize: 13 }} />
+          <Bar yAxisId="conv" dataKey="conversions" name="Conversões" fill={colors.conversions} fillOpacity={0.55}
+            radius={[4, 4, 0, 0]} isAnimationActive={false} />
+          <Line yAxisId="money" type="monotone" dataKey="spend" name="Investimento" stroke={colors.spend} strokeWidth={2.5}
+            dot={false} activeDot={{ r: 4, stroke: "var(--surface)", strokeWidth: 2 }} isAnimationActive={false} />
+          <Line yAxisId="cpl" type="monotone" dataKey="cpl" name="CPL" stroke={colors.cpl} strokeWidth={2}
+            strokeDasharray="5 4" dot={false} connectNulls activeDot={{ r: 4, stroke: "var(--surface)", strokeWidth: 2 }}
+            isAnimationActive={false} />
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
