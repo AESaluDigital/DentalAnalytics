@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "../auth";
+import { requirePermission } from "../auth";
 import { deleteIntegration } from "../integrations";
 import { revokeGoogle, revokeMeta } from "../oauth";
 import { clearDiscoveryCache, googleAdsAccounts, metaAdAccounts } from "../platforms/discovery";
@@ -11,7 +11,7 @@ import { clearGoogleTokenCache } from "../platforms/google-oauth";
 
 /** Desconecta: apaga o token do banco e revoga o acesso na própria plataforma. */
 export async function disconnectAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requirePermission("manage_integrations");
   const provider = String(form.get("provider"));
   if (provider !== "meta" && provider !== "google") return;
 
@@ -27,7 +27,7 @@ export async function disconnectAction(form: FormData): Promise<void> {
 
 /** Recarrega a lista de contas disponíveis (ignora o cache de 10 min). */
 export async function refreshAccountsAction(form?: FormData): Promise<void> {
-  await requireAdmin();
+  await requirePermission("manage_integrations");
   clearDiscoveryCache();
   revalidatePath("/settings/integrations");
   revalidatePath("/settings/google-ads");
@@ -53,7 +53,7 @@ async function mccAccount(customerId: string) {
 
 /** Vincula uma conta do MCC a um cliente existente ou cria um cliente novo com o nome da conta. */
 export async function linkGoogleAdsAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requirePermission("manage_integrations");
   const customerId = String(form.get("customer_id") ?? "").replace(/-/g, "");
   const target = String(form.get("client") ?? "");
   if (!/^\d{10}$/.test(customerId)) back("error", "Conta Google Ads inválida.");
@@ -92,7 +92,7 @@ export async function linkGoogleAdsAction(form: FormData): Promise<void> {
 
 /** Remove o vínculo da conta (o cliente continua cadastrado). */
 export async function unlinkGoogleAdsAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requirePermission("manage_integrations");
   const customerId = String(form.get("customer_id") ?? "");
   if (!/^\d{10}$/.test(customerId)) back("error", "Conta Google Ads inválida.");
   await query("UPDATE clients SET google_ads_customer_id = NULL, updated_at = now() WHERE google_ads_customer_id = $1", [customerId]);
@@ -103,7 +103,7 @@ export async function unlinkGoogleAdsAction(form: FormData): Promise<void> {
 
 /** Cria um cliente para cada conta do MCC que ainda não tem vínculo. */
 export async function importGoogleAdsAction(): Promise<void> {
-  await requireAdmin();
+  await requirePermission("manage_integrations");
   const list = await googleAdsAccounts();
   if (!list.ok) back("error", list.error);
   const linked = new Set(
@@ -139,7 +139,7 @@ const metaId = (form: FormData) => String(form.get("account_id") ?? "").replace(
 
 /** Vincula uma conta de anúncio da Meta a um cliente existente ou cria um cliente novo com o nome da conta. */
 export async function linkMetaAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requirePermission("manage_integrations");
   const accountId = metaId(form);
   const target = String(form.get("client") ?? "");
   if (!/^\d+$/.test(accountId)) metaBack("error", "Conta de anúncio Meta inválida.");
@@ -175,7 +175,7 @@ export async function linkMetaAction(form: FormData): Promise<void> {
 
 /** Remove o vínculo da conta Meta (o cliente continua cadastrado). */
 export async function unlinkMetaAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requirePermission("manage_integrations");
   const accountId = metaId(form);
   if (!/^\d+$/.test(accountId)) metaBack("error", "Conta de anúncio Meta inválida.");
   await query("UPDATE clients SET meta_ad_account_id = NULL, updated_at = now() WHERE meta_ad_account_id = $1", [accountId]);
@@ -186,7 +186,7 @@ export async function unlinkMetaAction(form: FormData): Promise<void> {
 
 /** Cria um cliente para cada conta Meta sem vínculo (de um portfólio, se informado, ou de todos). */
 export async function importMetaAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requirePermission("manage_integrations");
   const group = String(form.get("group") ?? "");
   const list = await metaAdAccounts();
   if (!list.ok) metaBack("error", list.error);

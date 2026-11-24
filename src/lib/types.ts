@@ -35,6 +35,48 @@ export interface AdsCampaignRow {
   conversionValue: number;
 }
 
+/** Métricas comuns a campanha, grupo, palavra-chave e termo de pesquisa. */
+export interface AdsMetrics {
+  spend: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  conversionValue: number;
+}
+
+export interface GadsAdGroupRow extends AdsMetrics {
+  id: string;
+  campaignId: string;
+  name: string;
+}
+
+export interface GadsKeywordRow extends AdsMetrics {
+  id: string;
+  campaignId: string;
+  adGroupId: string;
+  text: string;
+  /** EXACT | PHRASE | BROAD */
+  matchType: string;
+}
+
+export interface GadsSearchTermRow extends AdsMetrics {
+  campaignId: string;
+  adGroupId: string;
+  term: string;
+  /** Palavra-chave que acionou o termo (quando a API informa). */
+  keyword: string | null;
+  matchType: string | null;
+}
+
+/** Detalhamento do Google Ads: grupos de anúncios, palavras-chave e termos de pesquisa. */
+export interface GoogleAdsBreakdown {
+  adGroups: GadsAdGroupRow[];
+  keywords: GadsKeywordRow[];
+  searchTerms: GadsSearchTermRow[];
+  /** Avisos quando uma das consultas falhou ou foi limitada (o restante do relatório segue normal). */
+  notes: string[];
+}
+
 export interface AdsPlatformData {
   accountId: string;
   currency: string;
@@ -44,6 +86,8 @@ export interface AdsPlatformData {
   previousTotals: AdsTotals;
   daily: AdsDailyRow[];
   campaigns: AdsCampaignRow[];
+  /** Só Google Ads. Ausente em relatórios antigos. */
+  breakdown?: GoogleAdsBreakdown;
 }
 
 export interface Ga4Totals {

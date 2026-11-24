@@ -1,16 +1,20 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getUser } from "@/lib/auth";
+import { getUser, homeFor } from "@/lib/auth";
 import Logo from "@/components/Logo";
+import ThemeToggle from "@/components/ThemeToggle";
 import LoginForm from "./LoginForm";
 
 export const metadata = { title: "Entrar" };
 
 export default async function LoginPage() {
-  if (await getUser()) redirect("/dashboard");
+  const user = await getUser();
+  if (user) redirect(homeFor(user));
   return (
-    <div className="login-wrap">
-      <div className="login-card stack">
-        <Logo variant="onDark" height={40} />
+    <div className="auth-wrap">
+      <div className="auth-theme"><ThemeToggle /></div>
+      <div className="auth-card stack">
+        <Logo height={40} />
         <div>
           <h1>Relatórios de performance</h1>
           <p className="muted" style={{ margin: "6px 0 0" }}>
@@ -18,6 +22,9 @@ export default async function LoginPage() {
           </p>
         </div>
         <LoginForm />
+        <p className="muted small auth-alt">
+          Ainda não tem acesso? <Link href="/signup">Criar conta</Link>
+        </p>
       </div>
     </div>
   );

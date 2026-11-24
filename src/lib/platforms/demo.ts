@@ -1,6 +1,15 @@
 import "server-only";
 import { eachDay } from "../dates";
-import type { AdsPlatformData, AdsTotals, DateRange, Ga4Data, Ga4Totals } from "../types";
+import type {
+  AdsCampaignRow,
+  AdsMetrics,
+  AdsPlatformData,
+  AdsTotals,
+  DateRange,
+  Ga4Data,
+  Ga4Totals,
+  GoogleAdsBreakdown,
+} from "../types";
 
 /**
  * Dados FICTÍCIOS para testar o fluxo sem credenciais (DEMO_MODE=true).
@@ -94,22 +103,95 @@ export function demoMeta(accountId: string, conversionAction: string, range: Dat
   };
 }
 
+/** Divide as métricas de "parent" em partes com pesos aleatórios (determinísticos). */
+function split(parent: AdsMetrics, n: number, rand: () => number): AdsMetrics[] {
+  const w = Array.from({ length: n }, () => 0.2 + rand() ** 2);
+  const total = w.reduce((a, b) => a + b, 0);
+  return w.map((x) => {
+    const f = x / total;
+    const j = 0.6 + rand() * 0.8;
+    return {
+      spend: r2(parent.spend * f),
+      impressions: Math.round(parent.impressions * f),
+      clicks: Math.round(parent.clicks * f),
+      conversions: Math.round(parent.conversions * f * j),
+      conversionValue: r2(parent.conversionValue * f * j),
+    };
+  });
+}
+
+const DEMO_GROUPS: Record<string, { name: string; keywords: [string, string][] }[]> = {
+  "Pesquisa — Marca": [
+    { name: "Marca — termos exatos", keywords: [["superdental", "EXACT"], ["super dental clínica", "PHRASE"]] },
+    { name: "Marca + cidade", keywords: [["superdental perto de mim", "PHRASE"], ["superdental unidade", "BROAD"]] },
+  ],
+  "Pesquisa — Serviços principais": [
+    { name: "Implante dentário", keywords: [["implante dentário", "PHRASE"], ["implante dentário preço", "EXACT"], ["quanto custa implante", "BROAD"]] },
+    { name: "Ortodontia / aparelho", keywords: [["aparelho ortodôntico", "PHRASE"], ["alinhador invisível", "BROAD"], ["aparelho dental preço", "EXACT"]] },
+    { name: "Clareamento", keywords: [["clareamento dental", "PHRASE"], ["clareamento a laser", "BROAD"]] },
+  ],
+  "Display — Remarketing": [{ name: "Visitantes 30 dias", keywords: [] }],
+};
+
+const TERM_VARIANTS = ["", " preço", " perto de mim", " valor", " em promoção", " parcelado"];
+
+function demoBreakdown(id: string, campaignRows: AdsCampaignRow[]): GoogleAdsBreakdown {
+  const rand = seeded(`${id}:breakdown`);
+  const out: GoogleAdsBreakdown = { adGroups: [], keywords: [], searchTerms: [], notes: [] };
+  let gid = 100;
+  let kid = 1000;
+  for (const c of campaignRows) {
+    const groups = DEMO_GROUPS[c.name];
+    if (!groups) continue; // Performance Max não tem grupos/palavras-chave
+    split(c, groups.length, rand).forEach((gm, gi) => {
+      const g = { id: String(gid++), campaignId: c.id, name: groups[gi].name, ...gm };
+      out.adGroups.push(g);
+      const kws = groups[gi].keywords;
+      if (!kws.length) return;
+      split(g, kws.length, rand).forEach((km, ki) => {
+        const [text, matchType] = kws[ki];
+        out.keywords.push({ id: String(kid++), campaignId: c.id, adGroupId: g.id, text, matchType, ...km });
+        const nTerms = matchType === "EXACT" ? 1 : 2 + Math.floor(rand() * 3);
+        split(km, nTerms, rand).forEach((tm, ti) => {
+          out.searchTerms.push({
+            campaignId: c.id,
+            adGroupId: g.id,
+            term: `${text.replace(" preço", "")}${TERM_VARIANTS[ti % TERM_VARIANTS.length]}`,
+            keyword: text,
+            matchType,
+            ...tm,
+          });
+        });
+      });
+    });
+  }
+  out.searchTerms.sort((a, b) => b.spend - a.spend);
+  return out;
+}
+
 export function demoGoogleAds(customerId: string, range: DateRange, prev: DateRange): AdsPlatformData {
   const base = { spend: 140, cpm: 65, ctr: 0.045, cvr: 0.09 };
   const daily = adsSeries(`gads${customerId}`, range, base);
+  const totals = sum(daily);
+  // Valor de conversão fictício (ticket médio) para o ROAS aparecer na demonstração.
+  totals.conversionValue = r2(totals.conversions * 380);
+  const previousTotals = sum(adsSeries(`gads${customerId}`, prev, { ...base, spend: base.spend * 1.05 }));
+  previousTotals.conversionValue = r2(previousTotals.conversions * 360);
+  const campaignRows = campaigns(`gads${customerId}`, totals, [
+    "Pesquisa — Marca",
+    "Pesquisa — Serviços principais",
+    "Performance Max — Conversões",
+    "Display — Remarketing",
+  ]).map((c) => ({ ...c, conversionValue: r2(c.conversions * 380) }));
   return {
     accountId: customerId,
     currency: "BRL",
     conversionLabel: "Conversões (Google Ads)",
-    totals: sum(daily),
-    previousTotals: sum(adsSeries(`gads${customerId}`, prev, { ...base, spend: base.spend * 1.05 })),
+    totals,
+    previousTotals,
     daily,
-    campaigns: campaigns(`gads${customerId}`, sum(daily), [
-      "Pesquisa — Marca",
-      "Pesquisa — Serviços principais",
-      "Performance Max — Conversões",
-      "Display — Remarketing",
-    ]),
+    campaigns: campaignRows,
+    breakdown: demoBreakdown(`gads${customerId}`, campaignRows),
   };
 }
 

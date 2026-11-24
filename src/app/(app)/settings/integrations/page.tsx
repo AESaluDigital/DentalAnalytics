@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { Suspense } from "react";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { listIntegrations, type IntegrationInfo, type Provider } from "@/lib/integrations";
 import { isConfigured, redirectUri } from "@/lib/oauth";
@@ -145,7 +145,7 @@ async function requestOrigin(): Promise<string> {
 }
 
 export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string }> }) {
-  await requireAdmin();
+  await requirePermission("manage_integrations");
   const sp = await searchParams;
   const e = env();
   const origin = await requestOrigin();

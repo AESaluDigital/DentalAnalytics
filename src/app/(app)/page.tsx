@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth";
+import { can, requirePermission } from "@/lib/auth";
 import { query } from "@/lib/db";
 import type { ClientRow } from "@/lib/types";
 
@@ -8,7 +8,7 @@ interface Row extends ClientRow {
 }
 
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ q?: string; all?: string }> }) {
-  const user = await requireUser();
+  const user = await requirePermission("view_clients");
   const { q = "", all } = await searchParams;
   const term = q.trim().slice(0, 100);
   const showInactive = all === "1";
@@ -29,7 +29,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
           <span className="eyebrow">Carteira</span>
           <h1>Clientes</h1>
         </div>
-        {user.role === "admin" && <Link className="btn primary" href="/clients/new">+ Novo cliente</Link>}
+        {can(user, "manage_clients") && <Link className="btn primary" href="/clients/new">+ Novo cliente</Link>}
       </div>
 
       <form className="card row" role="search" style={{ padding: 14 }}>

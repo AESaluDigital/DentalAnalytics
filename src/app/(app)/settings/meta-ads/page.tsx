@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { query } from "@/lib/db";
 import { listIntegrations } from "@/lib/integrations";
@@ -150,7 +150,7 @@ export default async function MetaAdsAccountsPage({
 }: {
   searchParams: Promise<{ msg?: string; error?: string }>;
 }) {
-  await requireAdmin();
+  await requirePermission("manage_integrations");
   const sp = await searchParams;
   const e = env();
   const meta = (await listIntegrations()).find((i) => i.provider === "meta");

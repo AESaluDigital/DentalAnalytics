@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { requireUser } from "@/lib/auth";
+import { can, requirePermission } from "@/lib/auth";
 import { query, queryOne } from "@/lib/db";
 import { addDays, daysBetween, isIsoDate, todayIso } from "@/lib/dates";
 import { getLiveData } from "@/lib/report/live";
@@ -14,7 +14,6 @@ export const dynamic = "force-dynamic";
 /** Gerar relatório consulta as plataformas e a análise da IA; na Vercel o padrão de tempo é curto demais. */
 export const maxDuration = 300;
 
-
 const CLIENT_COLS =
   "id, name, meta_ad_account_id, meta_conversion_action, google_ads_customer_id, ga4_property_id, active";
 
@@ -27,7 +26,7 @@ function resolveRange(start: string | undefined, end: string | undefined, today:
   return { start, end };
 }
 
-async function LiveData({ client, start, end, force }: { client: ClientRow; start: string; end: string; force: boolean }) {
+async function LiveData({ client, start, end, force, canExport }: { client: ClientRow; start: string; end: string; force: boolean; canExport: boolean }) {
   const { data, fetchedAt } = await getLiveData(client, { start, end }, force);
   return (
     <>
@@ -36,10 +35,12 @@ async function LiveData({ client, start, end, force }: { client: ClientRow; star
           Dados consultados nas plataformas às{" "}
           {new Date(fetchedAt).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo" })}
         </span>
-        <div className="row">
-          <PrintButton />
-          <SnapshotButton clientId={client.id} start={start} end={end} />
-        </div>
+        {canExport && (
+          <div className="row">
+            <PrintButton />
+            <SnapshotButton clientId={client.id} start={start} end={end} />
+          </div>
+        )}
       </div>
       <ReportView data={data} analysis={null} />
     </>
@@ -47,7 +48,7 @@ async function LiveData({ client, start, end, force }: { client: ClientRow; star
 }
 
 export default async function DashboardPage({ searchParams }: { searchParams: Search }) {
-  const user = await requireUser();
+  const user = await requirePermission("view_reports");
   const sp = await searchParams;
   const today = todayIso();
   const { start, end } = resolveRange(sp.start, sp.end, today);
@@ -62,7 +63,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
         <h1>Dashboard</h1>
         <p className="muted">
           Nenhum cliente ativo cadastrado.{" "}
-          {user.role === "admin" && <Link href="/clients/new">Cadastrar cliente</Link>}
+          {can(user, "manage_clients") && <Link href="/clients/new">Cadastrar cliente</Link>}
         </p>
       </div>
     );
@@ -81,7 +82,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
         <div className="card">
           <p className="muted">
             {client.name} não tem contas vinculadas.{" "}
-            {user.role === "admin" && <Link href={`/clients/${client.id}/edit`}>Vincular contas</Link>}
+            {can(user, "manage_clients") && <Link href={`/clients/${client.id}/edit`}>Vincular contas</Link>}
           </p>
         </div>
       ) : (
@@ -93,7 +94,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
             </div>
           }
         >
-          <LiveData client={client} start={start} end={end} force={Boolean(sp.refresh)} />
+          <LiveData client={client} start={start} end={end} force={Boolean(sp.refresh)} canExport={can(user, "export_reports")} />
         </Suspense>
       )}
     </div>

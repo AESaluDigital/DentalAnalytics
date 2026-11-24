@@ -1,8 +1,12 @@
 import { formatDateBr } from "@/lib/dates";
 import { dec, int, money, pct, signedPct } from "@/lib/format";
 import { EMPTY_ADS, adsKpis, delta, ratio, sumAds } from "@/lib/metrics";
+import { adsCols, roasText, roasTone, roasValue } from "@/lib/metric-cols";
+import { METRIC_HELP, type MetricKey } from "@/lib/metric-help";
 import type { AdsPlatformData, Ga4Data, PlatformResult, ReportAnalysis, ReportData } from "@/lib/types";
 import { CategoryBarChart, DailyBarChart, DailyLineChart } from "./Charts";
+import GoogleAdsDrilldown from "./GoogleAdsDrilldown";
+import InfoTip from "../InfoTip";
 import Logo from "../Logo";
 
 const COLORS = { meta: "var(--series-1)", googleAds: "var(--series-2)", ga4: "var(--series-3)" };
@@ -15,30 +19,82 @@ interface Kpi {
   change: number | null;
   /** true quando queda é boa (custos: CPC, CPM, CPA) */
   lowerIsBetter?: boolean;
+  help: MetricKey;
 }
 
-function KpiGrid({ items }: { items: Kpi[] }) {
+/** Cabeçalho de tabela com o "i" de explicação. */
+function HelpTh({ label, help }: { label: string; help: MetricKey }) {
+  return (
+    <th className="num">
+      <span className="th-help">{label}<InfoTip label={label} text={METRIC_HELP[help]} /></span>
+    </th>
+  );
+}
+
+function Delta({ change, lowerIsBetter, prevText }: { change: number | null; lowerIsBetter?: boolean; prevText?: string }) {
+  const good = change === null || change === 0 ? null : (change > 0) !== !!lowerIsBetter;
+  return (
+    <span className={`kpi-delta ${good === null ? "" : good ? "up-good" : "down-bad"}`}>
+      {change === null ? (
+        <span className="muted">sem comparação</span>
+      ) : (
+        <>
+          <span aria-hidden>{change > 0 ? "▲" : change < 0 ? "▼" : "■"}</span> {signedPct(change)}
+          <span className="muted"> vs. anterior{prevText ? ` (${prevText})` : ""}</span>
+        </>
+      )}
+    </span>
+  );
+}
+
+function KpiGrid({ items, roas }: { items: Kpi[]; roas?: React.ReactNode }) {
   return (
     <div className="kpi-grid">
-      {items.map((k) => {
-        const good = k.change === null || k.change === 0 ? null : (k.change > 0) !== !!k.lowerIsBetter;
-        return (
-          <div key={k.label} className="kpi">
-            <span className="kpi-label">{k.label}</span>
-            <span className="kpi-value">{k.value}</span>
-            <span className={`kpi-delta ${good === null ? "" : good ? "up-good" : "down-bad"}`}>
-              {k.change === null ? (
-                <span className="muted">sem comparação</span>
-              ) : (
-                <>
-                  <span aria-hidden>{k.change > 0 ? "▲" : k.change < 0 ? "▼" : "■"}</span> {signedPct(k.change)}
-                  <span className="muted"> vs. anterior</span>
-                </>
-              )}
-            </span>
+      {roas}
+      {items.map((k, i) => (
+        <div key={k.label} className="kpi" style={{ "--i": i + (roas ? 1 : 0) } as React.CSSProperties}>
+          <span className="kpi-label">{k.label}<InfoTip label={k.label} text={METRIC_HELP[k.help]} /></span>
+          <span className="kpi-value">{k.value}</span>
+          <Delta change={k.change} lowerIsBetter={k.lowerIsBetter} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** ROAS explicado: valor, frase "R$ X por R$ 1", régua com o ponto de equilíbrio (1x) e variação. */
+function RoasCard({ value, prev, currency }: { value: number | null; prev: number | null; currency: string }) {
+  const tone = roasTone(value);
+  const fill = value === null ? 0 : Math.min(value / 5, 1) * 100;
+  return (
+    <div className={`kpi kpi-roas${tone ? ` ${tone}` : ""}`} style={{ "--i": 0 } as React.CSSProperties}>
+      <span className="kpi-label">ROAS · retorno sobre o investimento<InfoTip label="ROAS" text={METRIC_HELP.roas} /></span>
+      {value === null ? (
+        <>
+          <span className="kpi-value">—</span>
+          <span className="roas-text">
+            As conversões não têm valor em dinheiro configurado. Para ver o ROAS, cadastre o valor das conversões
+            (ex.: ticket médio) na plataforma.
+          </span>
+        </>
+      ) : (
+        <>
+          <span className="kpi-value">{roasText(value)}</span>
+          <span className="roas-text">
+            <strong>{money(value, currency)}</strong> de retorno para cada {money(1, currency)} investido —{" "}
+            {tone === "good" ? "o retorno cobriu o investimento." : "o retorno ainda não cobriu o investimento."}
+          </span>
+          <div className="roas-meter" role="img"
+            aria-label={`ROAS ${roasText(value)} numa régua de 0 a 5x; 1x é o ponto de equilíbrio`}>
+            <span className="roas-fill" style={{ width: `${fill}%` }} />
+            <span className="roas-mark" style={{ left: "20%" }} />
           </div>
-        );
-      })}
+          <span className="roas-scale" aria-hidden>
+            <span>0x</span><span className="be">1x · equilíbrio</span><span>5x+</span>
+          </span>
+          <Delta change={delta(value, prev)} prevText={roasText(prev)} />
+        </>
+      )}
     </div>
   );
 }
@@ -63,6 +119,37 @@ function ChannelText({ analysis, canal }: { analysis: ReportAnalysis | null; can
 
 /* ---------- seções ---------- */
 
+function CampaignTable({ p, hasValue }: { p: AdsPlatformData; hasValue: boolean }) {
+  if (p.campaigns.length === 0) return <p className="muted">Nenhuma campanha com entrega no período.</p>;
+  const cols = adsCols(p.currency, p.totals.spend, hasValue);
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Campanha</th>
+            {cols.map((c) => <HelpTh key={c.key} label={c.label} help={c.help} />)}
+          </tr>
+        </thead>
+        <tbody>
+          {p.campaigns.slice(0, 25).map((c) => (
+            <tr key={c.id || c.name}>
+              <td className="name">{c.name}</td>
+              {cols.map((col) => {
+                const tone = col.tone?.(c);
+                return <td key={col.key} className={`num${tone ? ` ${tone}` : ""}`}>{col.value(c)}</td>;
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {p.campaigns.length > 25 && (
+        <p className="muted small">Exibindo as 25 campanhas com maior investimento de {p.campaigns.length}.</p>
+      )}
+    </div>
+  );
+}
+
 function AdsSection({
   title,
   p,
@@ -84,18 +171,26 @@ function AdsSection({
   const hasValue = p.totals.conversionValue > 0 || p.previousTotals.conversionValue > 0;
 
   const items: Kpi[] = [
-    { label: "Investimento", value: money(p.totals.spend, cur), change: delta(p.totals.spend, p.previousTotals.spend) },
-    { label: "Impressões", value: int(p.totals.impressions), change: delta(p.totals.impressions, p.previousTotals.impressions) },
+    { label: "Investimento", help: "spend", value: money(p.totals.spend, cur), change: delta(p.totals.spend, p.previousTotals.spend) },
+    { label: "Impressões", help: "impressions", value: int(p.totals.impressions), change: delta(p.totals.impressions, p.previousTotals.impressions) },
     ...(showReach
-      ? [{ label: "Alcance", value: int(p.totals.reach ?? 0), change: delta(p.totals.reach ?? 0, p.previousTotals.reach ?? 0) }]
+      ? [{ label: "Alcance", help: "reach" as const, value: int(p.totals.reach ?? 0), change: delta(p.totals.reach ?? 0, p.previousTotals.reach ?? 0) }]
       : []),
-    { label: canal === "meta" ? "Cliques no link" : "Cliques", value: int(p.totals.clicks), change: delta(p.totals.clicks, p.previousTotals.clicks) },
-    { label: "CTR", value: pct(k.ctr, 2), change: delta(k.ctr, kp.ctr) },
-    { label: "CPC", value: money(k.cpc, cur), change: delta(k.cpc, kp.cpc), lowerIsBetter: true },
-    { label: "CPM", value: money(k.cpm, cur), change: delta(k.cpm, kp.cpm), lowerIsBetter: true },
-    { label: "Conversões", value: dec(p.totals.conversions), change: delta(p.totals.conversions, p.previousTotals.conversions) },
-    { label: "Custo por conversão", value: money(k.cpa, cur), change: delta(k.cpa, kp.cpa), lowerIsBetter: true },
-    ...(hasValue ? [{ label: "ROAS", value: k.roas === null ? "—" : `${dec(k.roas)}x`, change: delta(k.roas, kp.roas) }] : []),
+    {
+      label: canal === "meta" ? "Cliques no link" : "Cliques",
+      help: canal === "meta" ? "linkClicks" : "clicks",
+      value: int(p.totals.clicks),
+      change: delta(p.totals.clicks, p.previousTotals.clicks),
+    },
+    { label: "CTR", help: "ctr", value: pct(k.ctr, 2), change: delta(k.ctr, kp.ctr) },
+    { label: "CPC", help: "cpc", value: money(k.cpc, cur), change: delta(k.cpc, kp.cpc), lowerIsBetter: true },
+    { label: "CPM", help: "cpm", value: money(k.cpm, cur), change: delta(k.cpm, kp.cpm), lowerIsBetter: true },
+    { label: "Conversões", help: "conversions", value: dec(p.totals.conversions), change: delta(p.totals.conversions, p.previousTotals.conversions) },
+    { label: "Taxa de conversão", help: "conversionRate", value: pct(k.conversionRate, 2), change: delta(k.conversionRate, kp.conversionRate) },
+    { label: "Custo por conversão", help: "cpa", value: money(k.cpa, cur), change: delta(k.cpa, kp.cpa), lowerIsBetter: true },
+    ...(hasValue
+      ? [{ label: "Valor de conversão", help: "conversionValue" as const, value: money(p.totals.conversionValue, cur), change: delta(p.totals.conversionValue, p.previousTotals.conversionValue) }]
+      : []),
   ];
 
   return (
@@ -105,7 +200,7 @@ function AdsSection({
         <span className="muted small">Conversão: {p.conversionLabel}</span>
       </div>
       <ChannelText analysis={analysis} canal={canal} />
-      <KpiGrid items={items} />
+      <KpiGrid items={items} roas={<RoasCard value={roasValue(p.totals)} prev={roasValue(p.previousTotals)} currency={cur} />} />
 
       <div className="chart-grid">
         <div>
@@ -123,43 +218,12 @@ function AdsSection({
         </div>
       </div>
 
-      <h3 className="chart-title">Campanhas</h3>
-      {p.campaigns.length === 0 ? (
-        <p className="muted">Nenhuma campanha com entrega no período.</p>
+      <h3 className="chart-title">{canal === "google_ads" ? "Campanhas, grupos, palavras-chave e termos" : "Campanhas"}</h3>
+      {canal === "google_ads" ? (
+        <GoogleAdsDrilldown campaigns={p.campaigns} breakdown={p.breakdown} currency={cur}
+          totalSpend={p.totals.spend} hasValue={hasValue} />
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Campanha</th>
-                <th className="num">Investimento</th>
-                <th className="num">Impressões</th>
-                <th className="num">Cliques</th>
-                <th className="num">CTR</th>
-                <th className="num">Conversões</th>
-                <th className="num">Custo/conv.</th>
-                <th className="num">% do invest.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {p.campaigns.slice(0, 25).map((c) => (
-                <tr key={c.id || c.name}>
-                  <td className="name">{c.name}</td>
-                  <td className="num">{money(c.spend, cur)}</td>
-                  <td className="num">{int(c.impressions)}</td>
-                  <td className="num">{int(c.clicks)}</td>
-                  <td className="num">{pct(ratio(c.clicks, c.impressions), 2)}</td>
-                  <td className="num">{dec(c.conversions)}</td>
-                  <td className="num">{money(ratio(c.spend, c.conversions), cur)}</td>
-                  <td className="num">{pct(ratio(c.spend, p.totals.spend))}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {p.campaigns.length > 25 && (
-            <p className="muted small">Exibindo as 25 campanhas com maior investimento de {p.campaigns.length}.</p>
-          )}
-        </div>
+        <CampaignTable p={p} hasValue={hasValue} />
       )}
     </section>
   );
@@ -173,13 +237,18 @@ function Ga4Section({ g, analysis }: { g: Ga4Data; analysis: ReportAnalysis | nu
   const hasRevenue = t.totalRevenue > 0 || pt.totalRevenue > 0;
 
   const items: Kpi[] = [
-    { label: "Sessões", value: int(t.sessions), change: delta(t.sessions, pt.sessions) },
-    { label: "Usuários", value: int(t.totalUsers), change: delta(t.totalUsers, pt.totalUsers) },
-    { label: "Novos usuários", value: int(t.newUsers), change: delta(t.newUsers, pt.newUsers) },
-    { label: "Taxa de engajamento", value: pct(er), change: delta(er, erPrev) },
-    { label: "Eventos-chave", value: int(t.keyEvents), change: delta(t.keyEvents, pt.keyEvents) },
-    { label: "Taxa de eventos-chave", value: pct(ratio(t.keyEvents, t.sessions), 2), change: delta(ratio(t.keyEvents, t.sessions), ratio(pt.keyEvents, pt.sessions)) },
-    ...(hasRevenue ? [{ label: "Receita", value: money(t.totalRevenue), change: delta(t.totalRevenue, pt.totalRevenue) }] : []),
+    { label: "Sessões", help: "sessions", value: int(t.sessions), change: delta(t.sessions, pt.sessions) },
+    { label: "Usuários", help: "users", value: int(t.totalUsers), change: delta(t.totalUsers, pt.totalUsers) },
+    { label: "Novos usuários", help: "newUsers", value: int(t.newUsers), change: delta(t.newUsers, pt.newUsers) },
+    { label: "Taxa de engajamento", help: "engagementRate", value: pct(er), change: delta(er, erPrev) },
+    { label: "Eventos-chave", help: "keyEvents", value: int(t.keyEvents), change: delta(t.keyEvents, pt.keyEvents) },
+    {
+      label: "Taxa de eventos-chave",
+      help: "keyEventRate",
+      value: pct(ratio(t.keyEvents, t.sessions), 2),
+      change: delta(ratio(t.keyEvents, t.sessions), ratio(pt.keyEvents, pt.sessions)),
+    },
+    ...(hasRevenue ? [{ label: "Receita", help: "revenue" as const, value: money(t.totalRevenue), change: delta(t.totalRevenue, pt.totalRevenue) }] : []),
   ];
 
   return (
@@ -211,11 +280,11 @@ function Ga4Section({ g, analysis }: { g: Ga4Data; analysis: ReportAnalysis | nu
           <thead>
             <tr>
               <th>Canal</th>
-              <th className="num">Sessões</th>
-              <th className="num">% sessões</th>
-              <th className="num">Usuários</th>
-              <th className="num">Engajamento</th>
-              <th className="num">Eventos-chave</th>
+              <HelpTh label="Sessões" help="sessions" />
+              <HelpTh label="% sessões" help="sessionShare" />
+              <HelpTh label="Usuários" help="users" />
+              <HelpTh label="Engajamento" help="engagementRate" />
+              <HelpTh label="Eventos-chave" help="keyEvents" />
             </tr>
           </thead>
           <tbody>
@@ -251,18 +320,24 @@ function Overview({ data }: { data: ReportData }) {
   const totalPrev = paid.reduce((acc, x) => sumAds(acc, x.p.previousTotals), EMPTY_ADS);
   const k = adsKpis(total);
   const kp = adsKpis(totalPrev);
+  const showRoas = sameCurrency && (total.conversionValue > 0 || totalPrev.conversionValue > 0);
 
   const items: Kpi[] = [
     ...(sameCurrency
-      ? [{ label: "Investimento total", value: money(total.spend, currency), change: delta(total.spend, totalPrev.spend) }]
+      ? [{ label: "Investimento total", help: "spendTotal" as const, value: money(total.spend, currency), change: delta(total.spend, totalPrev.spend) }]
       : []),
-    { label: "Cliques", value: int(total.clicks), change: delta(total.clicks, totalPrev.clicks) },
-    { label: "Conversões", value: dec(total.conversions), change: delta(total.conversions, totalPrev.conversions) },
+    { label: "Cliques", help: "clicks", value: int(total.clicks), change: delta(total.clicks, totalPrev.clicks) },
+    { label: "Conversões", help: "conversions", value: dec(total.conversions), change: delta(total.conversions, totalPrev.conversions) },
     ...(sameCurrency
-      ? [{ label: "Custo por conversão", value: money(k.cpa, currency), change: delta(k.cpa, kp.cpa), lowerIsBetter: true }]
+      ? [{ label: "Custo por conversão", help: "cpa" as const, value: money(k.cpa, currency), change: delta(k.cpa, kp.cpa), lowerIsBetter: true }]
       : []),
     ...(data.ga4.status === "ok"
-      ? [{ label: "Sessões no site", value: int(data.ga4.data.totals.sessions), change: delta(data.ga4.data.totals.sessions, data.ga4.data.previousTotals.sessions) }]
+      ? [{
+          label: "Sessões no site",
+          help: "sessions" as const,
+          value: int(data.ga4.data.totals.sessions),
+          change: delta(data.ga4.data.totals.sessions, data.ga4.data.previousTotals.sessions),
+        }]
       : []),
   ];
 
@@ -276,7 +351,8 @@ function Overview({ data }: { data: ReportData }) {
   return (
     <section className="card report-section">
       <h2>Visão geral — mídia paga</h2>
-      <KpiGrid items={items} />
+      <KpiGrid items={items}
+        roas={showRoas ? <RoasCard value={roasValue(total)} prev={roasValue(totalPrev)} currency={currency} /> : undefined} />
 
       <div className="stack">
         {sameCurrency && (
@@ -297,16 +373,19 @@ function Overview({ data }: { data: ReportData }) {
               <thead>
                 <tr>
                   <th>Canal</th>
-                  <th className="num">Investimento</th>
-                  <th className="num">% invest.</th>
-                  <th className="num">Conversões</th>
-                  <th className="num">Custo/conv.</th>
-                  <th className="num">CTR</th>
+                  <HelpTh label="Investimento" help="spend" />
+                  <HelpTh label="% invest." help="spendShare" />
+                  <HelpTh label="Conversões" help="conversions" />
+                  <HelpTh label="Custo/conv." help="cpa" />
+                  <HelpTh label="CTR" help="ctr" />
+                  <HelpTh label="ROAS" help="roas" />
                 </tr>
               </thead>
               <tbody>
                 {paid.map((x) => {
                   const kk = adsKpis(x.p.totals);
+                  const r = roasValue(x.p.totals);
+                  const tone = roasTone(r);
                   return (
                     <tr key={x.key}>
                       <td><span className="swatch" style={{ background: x.color }} aria-hidden /> {x.label}</td>
@@ -315,6 +394,7 @@ function Overview({ data }: { data: ReportData }) {
                       <td className="num">{dec(x.p.totals.conversions)}</td>
                       <td className="num">{money(kk.cpa, x.p.currency)}</td>
                       <td className="num">{pct(kk.ctr, 2)}</td>
+                      <td className={`num${tone ? ` roas-${tone}` : ""}`}>{roasText(r)}</td>
                     </tr>
                   );
                 })}

@@ -1,0 +1,30 @@
+/** Explicações curtas das métricas, exibidas no "i" ao lado de cada uma. */
+export const METRIC_HELP = {
+  spend: "Quanto foi gasto em anúncios no período.",
+  spendTotal: "Soma do que foi gasto em Meta Ads e Google Ads no período.",
+  impressions: "Quantas vezes os anúncios apareceram na tela das pessoas (a mesma pessoa pode contar mais de uma vez).",
+  reach: "Quantas pessoas diferentes viram os anúncios pelo menos uma vez.",
+  clicks: "Quantas vezes as pessoas clicaram nos anúncios.",
+  linkClicks: "Cliques que levaram para o destino do anúncio (site, WhatsApp, formulário).",
+  ctr: "Taxa de cliques: de cada 100 vezes que o anúncio apareceu, quantas viraram clique (cliques ÷ impressões). Quanto maior, mais o anúncio chama a atenção.",
+  cpc: "Custo por clique: quanto, em média, cada clique custou (investimento ÷ cliques). Quanto menor, melhor.",
+  cpm: "Custo por mil impressões: quanto custou mostrar o anúncio 1.000 vezes. Quanto menor, melhor.",
+  conversions: "Ações importantes feitas depois do anúncio — contato, agendamento, formulário ou mensagem —, conforme configurado na plataforma.",
+  cpa: "Custo por conversão: quanto custou, em média, cada contato/agendamento (investimento ÷ conversões). Quanto menor, melhor.",
+  conversionRate: "Taxa de conversão: de cada 100 cliques, quantos viraram conversão (conversões ÷ cliques).",
+  conversionValue: "Valor em dinheiro atribuído às conversões (ex.: valor do tratamento), quando configurado na plataforma.",
+  roas: "Retorno sobre o investimento em anúncios: quanto voltou em valor de conversão para cada R$ 1 investido (valor ÷ investimento). Ex.: 3x = R$ 3 de retorno por R$ 1. Abaixo de 1x, o retorno não cobriu o investimento.",
+  spendShare: "Fatia do investimento total que foi para este item.",
+  matchType: "Correspondência da palavra-chave: Exata (só buscas com o mesmo sentido), Frase (buscas que contêm o sentido) ou Ampla (buscas relacionadas).",
+  searchTerm: "O que a pessoa realmente digitou no Google antes de ver e clicar no anúncio.",
+  sessions: "Visitas ao site: cada vez que alguém entra e navega (uma pessoa pode fazer várias visitas).",
+  users: "Pessoas diferentes que visitaram o site.",
+  newUsers: "Pessoas que visitaram o site pela primeira vez no período.",
+  engagementRate: "Visitas engajadas: ficaram mais de 10 segundos, viram 2+ páginas ou converteram. Mostra se o público se interessou pelo site.",
+  keyEvents: "Ações importantes no site (ex.: clique no WhatsApp, envio de formulário), marcadas como eventos-chave no GA4.",
+  keyEventRate: "De cada 100 visitas, quantas tiveram um evento-chave (eventos-chave ÷ sessões).",
+  revenue: "Receita registrada no site pelo GA4 (quando há e-commerce ou valor configurado).",
+  sessionShare: "Fatia das visitas do site que veio deste canal.",
+} as const;
+
+export type MetricKey = keyof typeof METRIC_HELP;

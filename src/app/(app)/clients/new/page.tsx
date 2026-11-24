@@ -1,9 +1,9 @@
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import ClientForm from "@/components/ClientForm";
 import { accountSuggestions } from "@/lib/suggestions";
 
 export default async function NewClientPage() {
-  await requireAdmin();
+  await requirePermission("manage_clients");
   const suggestions = await accountSuggestions();
   return (
     <div className="stack">

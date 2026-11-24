@@ -58,3 +58,9 @@ CREATE TABLE IF NOT EXISTS integrations (
   connected_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
   connected_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Permissões individuais (NULL = derivar do papel: admin = todas; user = padrão).
+-- Só as contas master (MASTER_ADMINS no .env) alteram permissões.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT[];
+-- Cadastro feito pela tela de login: fica pendente até uma conta master aprovar.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending BOOLEAN NOT NULL DEFAULT FALSE;

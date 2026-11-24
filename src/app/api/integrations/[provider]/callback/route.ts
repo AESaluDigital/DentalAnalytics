@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
-import { getUser } from "@/lib/auth";
+import { can, getUser } from "@/lib/auth";
 import { finishGoogle, finishMeta, redirectUri } from "@/lib/oauth";
 import { saveIntegration, type Provider } from "@/lib/integrations";
 import { PlatformError } from "@/lib/platforms/http";
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ provider: s
   if (provider !== "meta" && provider !== "google") return fail("Integração desconhecida.");
 
   const user = await getUser();
-  if (!user || user.role !== "admin") return fail("Apenas administradores podem conectar integrações.");
+  if (!user || !can(user, "manage_integrations")) return fail("Você não tem permissão para conectar integrações.");
 
   const params = req.nextUrl.searchParams;
   if (params.get("error")) {

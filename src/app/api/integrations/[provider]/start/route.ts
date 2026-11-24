@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getUser } from "@/lib/auth";
+import { can, getUser } from "@/lib/auth";
 import { isConfigured, startUrl } from "@/lib/oauth";
 import type { Provider } from "@/lib/integrations";
 
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ provider: s
 
   const user = await getUser();
   if (!user) return NextResponse.redirect(new URL("/login", req.url));
-  if (user.role !== "admin") return NextResponse.redirect(new URL("/", req.url));
+  if (!can(user, "manage_integrations")) return NextResponse.redirect(new URL("/", req.url));
   if (provider !== "meta" && provider !== "google") return NextResponse.redirect(back);
 
   const cfg = isConfigured(provider as Provider);

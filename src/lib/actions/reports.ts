@@ -3,7 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireUser } from "../auth";
+import { requirePermission } from "../auth";
 import { query, queryOne } from "../db";
 import { env } from "../env";
 import { daysBetween, isIsoDate, todayIso } from "../dates";
@@ -34,7 +34,7 @@ function shareExpiry(): Date | null {
 }
 
 export async function generateReportAction(_prev: GenerateState, form: FormData): Promise<GenerateState> {
-  const user = await requireUser();
+  const user = await requirePermission("export_reports");
 
   const clientId = Number(form.get("clientId"));
   const start = String(form.get("start") ?? "");
@@ -70,7 +70,7 @@ export async function generateReportAction(_prev: GenerateState, form: FormData)
 }
 
 export async function rotateShareAction(form: FormData): Promise<void> {
-  await requireUser();
+  await requirePermission("export_reports");
   const id = reportId(form);
   await query(
     "UPDATE reports SET share_token = $1, share_expires_at = $2, share_revoked = FALSE WHERE id = $3",
@@ -80,14 +80,14 @@ export async function rotateShareAction(form: FormData): Promise<void> {
 }
 
 export async function revokeShareAction(form: FormData): Promise<void> {
-  await requireUser();
+  await requirePermission("export_reports");
   const id = reportId(form);
   await query("UPDATE reports SET share_revoked = TRUE WHERE id = $1", [id]);
   revalidatePath(`/reports/${id}`);
 }
 
 export async function deleteReportAction(form: FormData): Promise<void> {
-  await requireUser();
+  await requirePermission("export_reports");
   const id = reportId(form);
   const row = await queryOne<{ client_id: number }>("DELETE FROM reports WHERE id = $1 RETURNING client_id", [id]);
   if (row) {

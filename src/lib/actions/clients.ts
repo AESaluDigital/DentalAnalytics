@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireAdmin } from "../auth";
+import { requirePermission } from "../auth";
 import { query, queryOne } from "../db";
 
 export interface ClientFormState {
@@ -48,7 +48,7 @@ function parse(form: FormData) {
 }
 
 export async function saveClientAction(_prev: ClientFormState, form: FormData): Promise<ClientFormState> {
-  await requireAdmin();
+  await requirePermission("manage_clients");
   const parsed = parse(form);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   const c = parsed.data;
@@ -80,7 +80,7 @@ export async function saveClientAction(_prev: ClientFormState, form: FormData): 
 }
 
 export async function deleteClientAction(form: FormData): Promise<void> {
-  await requireAdmin();
+  await requirePermission("manage_clients");
   const id = Number(form.get("id"));
   if (!Number.isInteger(id)) return;
   await query("DELETE FROM clients WHERE id = $1", [id]);

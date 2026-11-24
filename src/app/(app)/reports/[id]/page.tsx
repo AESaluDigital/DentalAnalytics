@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth";
+import { can, requirePermission } from "@/lib/auth";
 import { queryOne } from "@/lib/db";
 import { env } from "@/lib/env";
 import { deleteReportAction, revokeShareAction, rotateShareAction } from "@/lib/actions/reports";
@@ -22,7 +22,7 @@ interface Row {
 }
 
 export default async function ReportPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUser();
+  const user = await requirePermission("view_reports");
   const { id } = await params;
   if (!UUID.test(id)) notFound();
 
@@ -40,9 +40,10 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   return (
     <div className="stack">
       <div className="no-print">
-        <Link href={`/clients/${r.client_id}`} className="small">← Voltar ao cliente</Link>
+        <Link href="/reports" className="small back-link">← Relatórios</Link>
       </div>
 
+      {can(user, "export_reports") && (
       <section className="card stack no-print">
         <div className="row between">
           <h2>Compartilhamento</h2>
@@ -82,6 +83,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
           </form>
         </div>
       </section>
+      )}
 
       {!r.analysis && (
         <p className="muted no-print">

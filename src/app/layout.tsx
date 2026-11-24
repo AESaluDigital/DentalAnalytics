@@ -25,11 +25,24 @@ export const viewport: Viewport = {
   themeColor: "#060E11",
 };
 
+// Aplica o tema salvo (ou o do sistema) antes da pintura, para não piscar.
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("theme");if(t!=="light"&&t!=="dark"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme="light"}})()`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    // suppressHydrationWarning: extensões (ex.: Google Tag Assistant) injetam atributos no <html>.
+    // suppressHydrationWarning: o script de tema e extensões (ex.: Google Tag Assistant) alteram atributos do <html>.
     <html lang="pt-BR" className={`${jakarta.variable} ${inter.variable}`} suppressHydrationWarning>
-      <body>{children}</body>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
+      <body>
+        <div className="bg-orbs" aria-hidden>
+          <span className="orb orb-1" />
+          <span className="orb orb-2" />
+          <span className="orb orb-3" />
+        </div>
+        {children}
+      </body>
     </html>
   );
 }

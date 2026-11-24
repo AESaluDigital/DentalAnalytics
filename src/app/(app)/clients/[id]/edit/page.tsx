@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { queryOne } from "@/lib/db";
 import { deleteClientAction } from "@/lib/actions/clients";
 import ClientForm from "@/components/ClientForm";
@@ -7,7 +7,7 @@ import { accountSuggestions } from "@/lib/suggestions";
 import type { ClientRow } from "@/lib/types";
 
 export default async function EditClientPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireAdmin();
+  await requirePermission("manage_clients");
   const id = Number((await params).id);
   if (!Number.isInteger(id)) notFound();
 

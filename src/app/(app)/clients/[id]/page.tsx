@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth";
+import { can, requirePermission } from "@/lib/auth";
 import { query, queryOne } from "@/lib/db";
 import { formatDateBr, todayIso } from "@/lib/dates";
 import GenerateReportForm from "@/components/GenerateReportForm";
@@ -19,7 +19,7 @@ interface ReportListRow {
 export const maxDuration = 300;
 
 export default async function ClientPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
+  const user = await requirePermission("view_clients");
   const id = Number((await params).id);
   if (!Number.isInteger(id)) notFound();
 
@@ -48,12 +48,12 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
     <div className="stack">
       <div className="row between">
         <div>
-          <Link href="/" className="small">← Clientes</Link>
+          <Link href="/" className="small back-link">← Clientes</Link>
           <h1>{client.name}</h1>
         </div>
         <div className="row">
           <Link className="btn primary" href={`/dashboard?client=${client.id}`}>Abrir no dashboard</Link>
-          {user.role === "admin" && <Link className="btn" href={`/clients/${client.id}/edit`}>Editar</Link>}
+          {can(user, "manage_clients") && <Link className="btn" href={`/clients/${client.id}/edit`}>Editar</Link>}
         </div>
       </div>
 
@@ -74,7 +74,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
-      <GenerateReportForm clientId={client.id} today={todayIso()} />
+      {can(user, "export_reports") && <GenerateReportForm clientId={client.id} today={todayIso()} />}
 
       <div className="card">
         <h2 style={{ marginBottom: 12 }}>Relatórios gerados</h2>
