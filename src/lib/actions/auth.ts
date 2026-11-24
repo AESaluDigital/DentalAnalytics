@@ -3,7 +3,7 @@
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { createSession, destroySession, homeFor, verifyCredentials } from "../auth";
-import { query, queryOne } from "../db";
+import { ensureUserColumns, query, queryOne } from "../db";
 import { DEFAULT_PERMISSIONS } from "../permissions";
 
 export interface LoginState {
@@ -56,6 +56,7 @@ export async function signupAction(_prev: SignupState, form: FormData): Promise<
   if (password.length > 200) return { error: "Senha longa demais." };
   if (password !== confirm) return { error: "As senhas não conferem." };
 
+  await ensureUserColumns();
   const exists = await queryOne("SELECT 1 FROM users WHERE email = $1", [login]);
   if (exists) return { error: "Este usuário/e-mail já está cadastrado." };
 

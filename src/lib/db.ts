@@ -27,6 +27,24 @@ export async function query<T = QueryResultRow>(text: string, params: unknown[] 
   return res.rows as T[];
 }
 
+/**
+ * Garante as colunas de usuários adicionadas na versão "Css, criação de contas e permissões 1.0"
+ * (mesmo SQL do db/schema.sql, idempotente). Roda uma vez por processo: o site funciona mesmo que
+ * o schema ainda não tenha sido aplicado no Supabase.
+ */
+let userColumns: Promise<void> | undefined;
+export function ensureUserColumns(): Promise<void> {
+  userColumns ??= (async () => {
+    try {
+      await pool().query("ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT[]");
+      await pool().query("ALTER TABLE users ADD COLUMN IF NOT EXISTS pending BOOLEAN NOT NULL DEFAULT FALSE");
+    } catch (err) {
+      console.error("[db] não foi possível garantir as colunas de usuários", err);
+    }
+  })();
+  return userColumns;
+}
+
 export async function queryOne<T = QueryResultRow>(text: string, params: unknown[] = []): Promise<T | null> {
   const rows = await query<T>(text, params);
   return rows[0] ?? null;

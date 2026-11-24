@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { env } from "./env";
-import { queryOne } from "./db";
+import { ensureUserColumns, queryOne } from "./db";
 import { ALL_PERMISSIONS, DEFAULT_PERMISSIONS, isPermission, type Permission } from "./permissions";
 
 const COOKIE = "session";
@@ -65,6 +65,7 @@ function getDummyHash(): Promise<string> {
 export type LoginResult = { ok: true; user: SessionUser } | { ok: false; pending?: boolean };
 
 export async function verifyCredentials(login: string, password: string): Promise<LoginResult> {
+  await ensureUserColumns();
   const row = await queryOne<UserRow & { password_hash: string; active: boolean; pending: boolean }>(
     "SELECT id, email, name, role, permissions, password_hash, active, pending FROM users WHERE email = $1",
     [login.trim().toLowerCase()],
@@ -106,6 +107,7 @@ export async function getUser(): Promise<SessionUser | null> {
     const { payload } = await jwtVerify(token, key(), { algorithms: ["HS256"] });
     const uid = Number(payload.uid);
     if (!Number.isInteger(uid)) return null;
+    await ensureUserColumns();
     const row = await queryOne<UserRow>(
       "SELECT id, email, name, role, permissions FROM users WHERE id = $1 AND active = TRUE",
       [uid],
