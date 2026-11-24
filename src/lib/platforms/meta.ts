@@ -124,33 +124,83 @@ function metricsOf(r: InsightRow, conversionAction: string) {
 }
 
 interface AdLookup {
+  id?: string;
   preview_shareable_link?: string;
   creative?: { thumbnail_url?: string; image_url?: string; title?: string; body?: string };
 }
 
-/** Prévia dos criativos (GET /?ids=…), em lotes de 50 ids. */
-async function creatives(ids: string[]): Promise<Map<string, MetaCreative>> {
+const CREATIVE_FIELDS_BIG = "id,preview_shareable_link,creative.thumbnail_width(400).thumbnail_height(400){thumbnail_url,image_url,title,body}";
+const CREATIVE_FIELDS = "id,preview_shareable_link,creative{thumbnail_url,image_url,title,body}";
+
+/**
+ * Prévia dos criativos, em lotes de 50 anúncios.
+ * O parâmetro "?ids=" foi descontinuado na v26+; usamos a lista de anúncios da conta filtrada pelos IDs
+ * (GET /act_{id}/ads) e, se a Meta recusar o filtro, o envio em lote da Graph API (POST / com "batch").
+ */
+async function creatives(accountId: string, ids: string[]): Promise<Map<string, MetaCreative>> {
   const { token, secret, version } = await metaCredentials();
   const out = new Map<string, MetaCreative>();
   const proof = appSecretProof(token, secret);
+  const auth = { Authorization: `Bearer ${token}` };
+
+  const viaAccount = async (batch: string[], fields: string): Promise<AdLookup[]> => {
+    const q = new URLSearchParams({
+      fields,
+      filtering: JSON.stringify([{ field: "id", operator: "IN", value: batch }]),
+      limit: String(batch.length),
+    });
+    if (proof) q.set("appsecret_proof", proof);
+    const res = await fetchJson<{ data?: AdLookup[] }>(
+      PLATFORM,
+      `https://graph.facebook.com/${version}/act_${encodeURIComponent(accountId)}/ads?${q}`,
+      { headers: auth },
+    );
+    return res.data ?? [];
+  };
+
+  const viaBatch = async (batch: string[], fields: string): Promise<AdLookup[]> => {
+    const body = new URLSearchParams({
+      include_headers: "false",
+      batch: JSON.stringify(batch.map((id) => ({ method: "GET", relative_url: `${id}?fields=${encodeURIComponent(fields)}` }))),
+    });
+    if (proof) body.set("appsecret_proof", proof);
+    const res = await fetchJson<({ code: number; body: string } | null)[]>(PLATFORM, `https://graph.facebook.com/${version}/`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    return (res ?? []).flatMap((r) => {
+      if (!r || r.code !== 200) return [];
+      try {
+        return [JSON.parse(r.body) as AdLookup];
+      } catch {
+        return [];
+      }
+    });
+  };
+
   for (let i = 0; i < ids.length; i += 50) {
     const batch = ids.slice(i, i + 50);
-    const get = async (fields: string) => {
-      const q = new URLSearchParams({ ids: batch.join(","), fields });
-      if (proof) q.set("appsecret_proof", proof);
-      return fetchJson<Record<string, AdLookup>>(PLATFORM, `https://graph.facebook.com/${version}/?${q}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    };
-    let res: Record<string, AdLookup>;
-    try {
-      // Miniatura maior para a prévia; se a API recusar os parâmetros, busca a padrão.
-      res = await get("preview_shareable_link,creative.thumbnail_width(400).thumbnail_height(400){thumbnail_url,image_url,title,body}");
-    } catch {
-      res = await get("preview_shareable_link,creative{thumbnail_url,image_url,title,body}");
+    // Tenta do jeito mais completo para o mais simples; a primeira que funcionar vale.
+    // Se todas falharem, o erro da última sobe e aparece como aviso no relatório.
+    let list: AdLookup[] | null = null;
+    let lastErr: unknown = null;
+    for (const attempt of [
+      () => viaAccount(batch, CREATIVE_FIELDS_BIG),
+      () => viaAccount(batch, CREATIVE_FIELDS),
+      () => viaBatch(batch, CREATIVE_FIELDS),
+    ]) {
+      try {
+        list = await attempt();
+        break;
+      } catch (err) {
+        lastErr = err;
+      }
     }
-    for (const [id, a] of Object.entries(res ?? {})) {
-      out.set(id, {
+    if (list === null) throw lastErr;
+    for (const a of list) {
+      if (!a.id) continue;
+      out.set(a.id, {
         thumbnail: a.creative?.thumbnail_url ?? null,
         image: a.creative?.image_url ?? null,
         title: a.creative?.title ?? null,
@@ -185,7 +235,7 @@ async function fetchMetaBreakdown(accountId: string, conversionAction: string, r
   const withDelivery = ads.filter((a) => num(a.impressions) > 0).sort((a, b) => num(b.spend) - num(a.spend));
   const topAds = withDelivery.slice(0, LIMIT_ADS);
   if (withDelivery.length > LIMIT_ADS) notes.push(`Exibindo os ${LIMIT_ADS} anúncios com maior investimento.`);
-  const previews = await creatives(topAds.map((a) => a.ad_id ?? "").filter(Boolean)).catch((err) => {
+  const previews = await creatives(accountId, topAds.map((a) => a.ad_id ?? "").filter(Boolean)).catch((err) => {
     notes.push(`Prévias dos criativos indisponíveis${err instanceof PlatformError ? `: ${err.message}` : "."}`);
     return new Map<string, MetaCreative>();
   });
