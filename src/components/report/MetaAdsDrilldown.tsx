@@ -51,10 +51,10 @@ function Thumb({ ad, onOpen }: { ad: MetaAdRow; onOpen: () => void }) {
   const [broken, setBroken] = useState(false);
   const src = ad.creative?.thumbnail ?? ad.creative?.image ?? null;
   if (!src || broken) {
-    return <span className="ad-thumb empty" aria-hidden>▣</span>;
+    return <span className="crv-thumb empty" aria-hidden>▣</span>;
   }
   return (
-    <button type="button" className="ad-thumb" onClick={onOpen} aria-label={`Ver prévia de ${ad.name}`}>
+    <button type="button" className="crv-thumb" onClick={onOpen} aria-label={`Ver prévia de ${ad.name}`}>
       <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} />
     </button>
   );
@@ -76,10 +76,10 @@ function Preview({ ad, onClose }: { ad: MetaAdRow; onClose: () => void }) {
           <strong className="ellipsis">{ad.name}</strong>
           <button type="button" className="btn icon" onClick={onClose} aria-label="Fechar">✕</button>
         </div>
-        {src ? <img className="ad-preview-img" src={src} alt={`Criativo do anúncio ${ad.name}`} referrerPolicy="no-referrer" /> :
+        {src ? <img className="crv-preview-img" src={src} alt={`Criativo do anúncio ${ad.name}`} referrerPolicy="no-referrer" /> :
           <p className="muted">Imagem indisponível.</p>}
         {c?.title && <strong>{c.title}</strong>}
-        {c?.body && <p className="ad-preview-body">{c.body}</p>}
+        {c?.body && <p className="crv-preview-body">{c.body}</p>}
         <div className="row">
           {c?.previewLink && (
             <a className="btn primary" href={c.previewLink} target="_blank" rel="noopener noreferrer">Ver anúncio no Facebook ↗</a>
@@ -170,12 +170,12 @@ export default function MetaAdsDrilldown({ campaigns, breakdown, currency, total
             <tbody>
               {adList.map((a) => (
                 <tr key={a.id}>
-                  <td className="ad-name-cell">
-                    <div className="ad-line">
+                  <td className="crv-name-cell">
+                    <div className="crv-line">
                       <Thumb ad={a} onOpen={() => setPreview(a)} />
-                      <div className="ad-text">
-                        <div className="ad-title">{a.name?.trim() || `Anúncio ${a.id || "sem ID"}`}</div>
-                        <div className="ad-sub">
+                      <div className="crv-text">
+                        <div className="crv-title">{a.name?.trim() || `Anúncio ${a.id || "sem ID"}`}</div>
+                        <div className="crv-sub">
                           {a.campaignName || campaignName.get(a.campaignId) || "—"} › {a.adSetName || setName.get(a.adSetId) || "—"}
                         </div>
                         {(a.creative?.thumbnail || a.creative?.image || a.creative?.previewLink) && (
@@ -244,7 +244,7 @@ export default function MetaAdsDrilldown({ campaigns, breakdown, currency, total
                         {sOpen && ads.map((a) => (
                           <tr key={a.id} className="lvl-2 tree-in">
                             <td className="name">
-                              <span className="tree-cell ad-cell">
+                              <span className="tree-cell crv-cell">
                                 <Thumb ad={a} onOpen={() => setPreview(a)} />
                                 <span>
                                   <span className="tree-kind">Anúncio</span> {a.name}
