@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { can, requirePermission } from "@/lib/auth";
-import { query } from "@/lib/db";
+import { ensureSchema, query } from "@/lib/db";
 import { formatDateBr, isIsoDate, todayIso } from "@/lib/dates";
 import BulkReports from "@/components/BulkReports";
 
@@ -26,10 +26,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const clientId = Number(sp.client);
   const filter = Number.isInteger(clientId) && clientId > 0 ? clientId : null;
 
+  await ensureSchema();
   const [clients, reports] = await Promise.all([
     query<{ id: number; name: string; active: boolean; has_accounts: boolean }>(
       `SELECT id, name, active,
-              (meta_ad_account_id IS NOT NULL OR google_ads_customer_id IS NOT NULL OR ga4_property_id IS NOT NULL) AS has_accounts
+              (meta_ad_account_id IS NOT NULL OR google_ads_customer_id IS NOT NULL OR ga4_property_id IS NOT NULL
+               OR EXISTS (SELECT 1 FROM sellbot_connections s WHERE s.client_id = clients.id)) AS has_accounts
        FROM clients ORDER BY lower(name)`,
     ),
     query<Row>(

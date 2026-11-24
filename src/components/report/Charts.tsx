@@ -108,21 +108,25 @@ export function DailyBarChart({
   label,
   color,
   height = 220,
+  format = "int",
+  currency = "BRL",
 }: {
   data: object[];
   dataKey: string;
   label: string;
   color: string;
   height?: number;
+  format?: ValueFormat;
+  currency?: string;
 }) {
-  const fmt = makeFormatter("int", "BRL");
+  const fmt = makeFormatter(format, currency);
   return (
     <div style={{ width: "100%", height }}>
       <ResponsiveContainer>
         <BarChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }} barCategoryGap={2}>
           <CartesianGrid stroke="var(--grid)" vertical={false} />
           <XAxis dataKey="date" tickFormatter={dayLabel} minTickGap={24} {...axisProps} />
-          <YAxis tickFormatter={(v: number) => compact.format(v)} width={48} axisLine={false} allowDecimals={false} {...axisProps} />
+          <YAxis tickFormatter={(v: number) => compact.format(v)} width={48} axisLine={false} allowDecimals={format === "money"} {...axisProps} />
           <Tooltip
             {...tooltipStyle}
             cursor={{ fill: "var(--surface-2)" }}

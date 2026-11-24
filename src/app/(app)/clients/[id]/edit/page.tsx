@@ -3,10 +3,17 @@ import { requirePermission } from "@/lib/auth";
 import { queryOne } from "@/lib/db";
 import { deleteClientAction } from "@/lib/actions/clients";
 import ClientForm from "@/components/ClientForm";
+import SellbotPanel from "@/components/SellbotPanel";
 import { accountSuggestions } from "@/lib/suggestions";
 import type { ClientRow } from "@/lib/types";
 
-export default async function EditClientPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditClientPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ sellbot_ok?: string; sellbot_error?: string }>;
+}) {
   await requirePermission("manage_clients");
   const id = Number((await params).id);
   if (!Number.isInteger(id)) notFound();
@@ -17,11 +24,13 @@ export default async function EditClientPage({ params }: { params: Promise<{ id:
     [id],
   );
   if (!client) notFound();
+  const sp = await searchParams;
 
   return (
     <div className="stack">
       <h1>Editar {client.name}</h1>
       <ClientForm client={client} suggestions={await accountSuggestions()} />
+      <SellbotPanel clientId={client.id} ok={sp.sellbot_ok} error={sp.sellbot_error} />
       <form action={deleteClientAction} className="card row between">
         <span className="ink-2">Excluir o cliente apaga também todos os relatórios e links dele.</span>
         <input type="hidden" name="id" value={client.id} />

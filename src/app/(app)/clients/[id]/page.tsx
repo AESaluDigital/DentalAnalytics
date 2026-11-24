@@ -4,6 +4,7 @@ import { can, requirePermission } from "@/lib/auth";
 import { query, queryOne } from "@/lib/db";
 import { formatDateBr, todayIso } from "@/lib/dates";
 import GenerateReportForm from "@/components/GenerateReportForm";
+import { hasSellbot } from "@/lib/platforms/sellbot";
 import type { ClientRow } from "@/lib/types";
 
 interface ReportListRow {
@@ -42,6 +43,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       extra: client.meta_ad_account_id ? `conversão: ${client.meta_conversion_action}` : null },
     { label: "Google Ads", value: client.google_ads_customer_id?.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3") ?? null, extra: null },
     { label: "GA4", value: client.ga4_property_id ? `properties/${client.ga4_property_id}` : null, extra: null },
+    { label: "Sellbot (vendas)", value: (await hasSellbot(client.id)) ? "conectada" : null, extra: null },
   ];
 
   return (

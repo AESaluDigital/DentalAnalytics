@@ -7,6 +7,7 @@ import type { AdsPlatformData, Ga4Data, PlatformResult, ReportAnalysis, ReportDa
 import { CategoryBarChart, DailyBarChart, DailyLineChart } from "./Charts";
 import GoogleAdsDrilldown from "./GoogleAdsDrilldown";
 import MainChart from "./MainChart";
+import SellbotSection, { type AdCampaignRef } from "./SellbotSection";
 import InfoTip from "../InfoTip";
 import Logo from "../Logo";
 
@@ -433,6 +434,25 @@ function AnalysisBlock({ analysis }: { analysis: ReportAnalysis | null }) {
   );
 }
 
+/** Vendas do CRM com o investimento em anúncios do mesmo relatório (ROAS real). */
+function Sales({ data }: { data: ReportData }) {
+  if (data.sellbot?.status !== "ok") return null;
+  const paid = [data.meta, data.googleAds].flatMap((r) => (r.status === "ok" ? [r.data] : []));
+  const currency = paid[0]?.currency ?? "BRL";
+  const same = paid.every((p) => p.currency === currency);
+  const spend = paid.length && same ? paid.reduce((a, p) => a + p.totals.spend, 0) : null;
+  const spendPrev = paid.length && same ? paid.reduce((a, p) => a + p.previousTotals.spend, 0) : null;
+  const conversions = paid.length ? paid.reduce((a, p) => a + p.totals.conversions, 0) : null;
+  const campaigns: AdCampaignRef[] = [
+    ...(data.meta.status === "ok" ? data.meta.data.campaigns.map((c) => ({ id: c.id, name: c.name, platform: "Meta Ads" as const, spend: c.spend })) : []),
+    ...(data.googleAds.status === "ok" ? data.googleAds.data.campaigns.map((c) => ({ id: c.id, name: c.name, platform: "Google Ads" as const, spend: c.spend })) : []),
+  ];
+  return (
+    <SellbotSection data={data.sellbot.data} range={data.range} currency={currency} adSpend={spend} adSpendPrev={spendPrev}
+      adConversions={conversions} campaigns={campaigns} />
+  );
+}
+
 /* ---------- relatório ---------- */
 
 export default function ReportView({ data, analysis }: { data: ReportData; analysis: ReportAnalysis | null }) {
@@ -464,6 +484,8 @@ export default function ReportView({ data, analysis }: { data: ReportData; analy
 
       <AnalysisBlock analysis={analysis} />
       <Overview data={data} />
+      <Sales data={data} />
+      {data.sellbot && <Unavailable result={data.sellbot} name="Vendas — Sellbot" />}
 
       {data.meta.status === "ok" && (
         <AdsSection title="Meta Ads" p={data.meta.data} color={COLORS.meta} canal="meta" analysis={analysis} showReach />

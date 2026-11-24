@@ -29,6 +29,11 @@ export async function getLiveData(
 
   const data = await promise;
   // Falhas não ficam em cache: a próxima abertura tenta de novo.
-  if ([data.meta, data.googleAds, data.ga4].some((r) => r.status === "error")) cache.delete(key);
+  if ([data.meta, data.googleAds, data.ga4, data.sellbot].some((r) => r?.status === "error")) cache.delete(key);
   return { data, fetchedAt: at };
+}
+
+/** Limpa o cache de um cliente (ex.: depois de conectar/alterar a Sellbot). */
+export function clearLiveCache(clientId: number): void {
+  for (const k of cache.keys()) if (k.startsWith(`${clientId}|`)) cache.delete(k);
 }

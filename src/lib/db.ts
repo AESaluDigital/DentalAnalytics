@@ -28,22 +28,30 @@ export async function query<T = QueryResultRow>(text: string, params: unknown[] 
 }
 
 /**
- * Garante as colunas de usuários adicionadas na versão "Css, criação de contas e permissões 1.0"
- * (mesmo SQL do db/schema.sql, idempotente). Roda uma vez por processo: o site funciona mesmo que
- * o schema ainda não tenha sido aplicado no Supabase.
+ * Garante as mudanças de banco das versões recentes (mesmo SQL idempotente do db/schema.sql).
+ * Roda uma vez por processo: o site funciona mesmo que o schema ainda não tenha sido aplicado no Supabase.
  */
-let userColumns: Promise<void> | undefined;
-export function ensureUserColumns(): Promise<void> {
-  userColumns ??= (async () => {
+let schemaReady: Promise<void> | undefined;
+export function ensureSchema(): Promise<void> {
+  schemaReady ??= (async () => {
     try {
       await pool().query("ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT[]");
       await pool().query("ALTER TABLE users ADD COLUMN IF NOT EXISTS pending BOOLEAN NOT NULL DEFAULT FALSE");
+      await pool().query(`CREATE TABLE IF NOT EXISTS sellbot_connections (
+        client_id INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+        token_encrypted TEXT NOT NULL,
+        global_pipelines TEXT[],
+        connected_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        connected_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
     } catch (err) {
-      console.error("[db] não foi possível garantir as colunas de usuários", err);
+      console.error("[db] não foi possível garantir o schema", err);
     }
   })();
-  return userColumns;
+  return schemaReady;
 }
+
+/** Nome antigo, mantido por compatibilidade. */
+export const ensureUserColumns = ensureSchema;
 
 export async function queryOne<T = QueryResultRow>(text: string, params: unknown[] = []): Promise<T | null> {
   const rows = await query<T>(text, params);

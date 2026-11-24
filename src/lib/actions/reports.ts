@@ -9,6 +9,7 @@ import { env } from "../env";
 import { daysBetween, isIsoDate, todayIso } from "../dates";
 import { buildReportData } from "../report/build";
 import { generateAnalysis } from "../report/analysis";
+import { hasSellbot } from "../platforms/sellbot";
 import type { ClientRow } from "../types";
 
 export interface GenerateState {
@@ -55,7 +56,7 @@ async function createReport(
     [clientId],
   );
   if (!client) return { ok: false, error: "Cliente não encontrado." };
-  if (!client.meta_ad_account_id && !client.google_ads_customer_id && !client.ga4_property_id) {
+  if (!client.meta_ad_account_id && !client.google_ads_customer_id && !client.ga4_property_id && !(await hasSellbot(client.id))) {
     return { ok: false, error: "Sem nenhuma conta vinculada." };
   }
 

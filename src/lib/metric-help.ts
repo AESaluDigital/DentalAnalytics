@@ -25,6 +25,15 @@ export const METRIC_HELP = {
   keyEvents: "Ações importantes no site (ex.: clique no WhatsApp, envio de formulário), marcadas como eventos-chave no GA4.",
   keyEventRate: "De cada 100 visitas, quantas tiveram um evento-chave (eventos-chave ÷ sessões).",
   revenue: "Receita registrada no site pelo GA4 (quando há e-commerce ou valor configurado).",
+  sales: "Negócios marcados como ganhos no CRM (Sellbot) dentro do período, pela data do ganho.",
+  salesRevenue: "Soma do valor dos negócios ganhos no período — o faturamento registrado pelo comercial.",
+  ticket: "Ticket médio: faturamento ÷ número de vendas.",
+  realRoas: "ROAS real: faturamento das vendas no CRM ÷ investimento em anúncios (Meta + Google) no mesmo período. Diferente do ROAS das plataformas, usa o que o comercial realmente vendeu.",
+  winRate: "Taxa de ganho: de cada 100 negócios fechados no período (ganhos + perdidos), quantos foram ganhos.",
+  lost: "Negócios marcados como perdidos no período.",
+  openPipeline: "Negócios ainda em aberto no funil agora, com o valor somado (potencial de venda).",
+  convToSale: "Vendas no CRM ÷ conversões reportadas pelas plataformas de anúncio. Mostra quanto das conversões virou venda de fato.",
+  costPerSale: "Custo por venda: investimento em anúncios ÷ número de vendas no CRM.",
   sessionShare: "Fatia das visitas do site que veio deste canal.",
 } as const;
 

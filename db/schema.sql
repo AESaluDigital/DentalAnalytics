@@ -64,3 +64,13 @@ CREATE TABLE IF NOT EXISTS integrations (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT[];
 -- Cadastro feito pela tela de login: fica pendente até uma conta master aprovar.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pending BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Conexão de cada cliente com a Sellbot (CRM de vendas). Token CRIPTOGRAFADO com INTEGRATIONS_KEY.
+-- global_pipelines: funis somados na visão Global (NULL = todos).
+CREATE TABLE IF NOT EXISTS sellbot_connections (
+  client_id         INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+  token_encrypted   TEXT NOT NULL,
+  global_pipelines  TEXT[],
+  connected_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  connected_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);

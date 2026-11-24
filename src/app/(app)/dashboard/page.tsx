@@ -4,6 +4,7 @@ import { can, requirePermission } from "@/lib/auth";
 import { query, queryOne } from "@/lib/db";
 import { addDays, daysBetween, isIsoDate, todayIso } from "@/lib/dates";
 import { getLiveData } from "@/lib/report/live";
+import { hasSellbot } from "@/lib/platforms/sellbot";
 import DashboardToolbar from "@/components/DashboardToolbar";
 import ReportView from "@/components/report/ReportView";
 import type { ClientRow } from "@/lib/types";
@@ -70,7 +71,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const requested = Number(sp.client);
   const clientId = clients.some((c) => c.id === requested) ? requested : clients[0].id;
   const client = (await queryOne<ClientRow>(`SELECT ${CLIENT_COLS} FROM clients WHERE id = $1`, [clientId]))!;
-  const hasAccounts = client.meta_ad_account_id || client.google_ads_customer_id || client.ga4_property_id;
+  const hasAccounts =
+    client.meta_ad_account_id || client.google_ads_customer_id || client.ga4_property_id || (await hasSellbot(client.id));
 
   return (
     <div className="stack">

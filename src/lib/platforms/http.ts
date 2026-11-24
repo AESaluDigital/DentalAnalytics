@@ -117,6 +117,7 @@ function extractMessage(body: unknown): string | undefined {
   const err = first?.error as Record<string, unknown> | undefined;
   if (err && typeof err.message === "string") return err.message;
   if (typeof b.error_description === "string") return b.error_description;
+  if (typeof b.message === "string") return b.message; // Sellbot
   return undefined;
 }
 
