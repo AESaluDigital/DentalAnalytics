@@ -25,6 +25,18 @@ npm run user:create -- --login voce@empresa.com.br --name "Seu Nome" --role admi
 npm run dev                 # http://localhost:3000
 ```
 
+### Banco compartilhado no Supabase
+
+O projeto DentalAnalytics no Supabase guarda só o **banco**; o código fica no GitHub. Para manter o banco
+do Supabase igual ao `db/schema.sql`:
+
+1. Ative os hooks do repositório (uma vez por máquina): `npm run hooks:install`
+2. No `.env`, preencha `SUPABASE_DATABASE_URL` (Supabase › Project Settings › Database › Connection string).
+
+A partir daí, todo commit que altera `db/schema.sql` aplica o schema no Supabase automaticamente
+(`.githooks/post-commit`). Para aplicar manualmente: `npm run db:migrate:supabase`.
+Para pular uma vez: `SKIP_SUPABASE=1 git commit ...`.
+
 Produção: `npm run build` e depois `npm start`, atrás de HTTPS (o cookie de sessão é `secure` em produção).
 Defina `APP_URL` com o domínio público, porque ele é usado para montar os links compartilhados.
 

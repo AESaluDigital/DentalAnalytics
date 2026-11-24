@@ -1,0 +1,23 @@
+#!/bin/sh
+# Depois de cada commit: se o commit alterou db/schema.sql, aplica o schema no banco
+# compartilhado do Supabase. Ative uma vez por máquina com: git config core.hooksPath .githooks
+# Para pular uma vez: SKIP_SUPABASE=1 git commit ...
+
+[ -n "$SKIP_SUPABASE" ] && exit 0
+
+if ! git diff-tree --no-commit-id --name-only -r HEAD | grep -q '^db/schema\.sql$'; then
+  exit 0
+fi
+
+if [ ! -f .env ] || ! grep -Eq '^SUPABASE_DATABASE_URL=.+' .env; then
+  echo "[supabase] db/schema.sql mudou, mas SUPABASE_DATABASE_URL não está no .env — schema NÃO aplicado no Supabase."
+  exit 0
+fi
+
+echo "[supabase] db/schema.sql mudou neste commit — aplicando no Supabase..."
+if npm run --silent db:migrate:supabase; then
+  echo "[supabase] OK."
+else
+  echo "[supabase] FALHOU. O commit foi feito; rode de novo: npm run db:migrate:supabase"
+fi
+exit 0

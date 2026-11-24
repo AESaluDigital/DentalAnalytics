@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit",
     "db:dev": "tsx --env-file=.env scripts/dev-db.ts",
     "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
+    "db:migrate:supabase": "tsx --env-file=.env scripts/migrate.ts --supabase",
+    "hooks:install": "git config core.hooksPath .githooks",
     "google:auth": "tsx --env-file=.env scripts/google-auth.ts",
     "check:credentials": "tsx --env-file=.env scripts/check-credentials.ts",
     "user:create": "tsx --env-file=.env scripts/create-user.ts"
