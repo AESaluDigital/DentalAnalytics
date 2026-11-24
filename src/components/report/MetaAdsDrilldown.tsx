@@ -170,19 +170,19 @@ export default function MetaAdsDrilldown({ campaigns, breakdown, currency, total
             <tbody>
               {adList.map((a) => (
                 <tr key={a.id}>
-                  <td className="name">
-                    <span className="tree-cell ad-cell">
+                  <td className="ad-name-cell">
+                    <div className="ad-line">
                       <Thumb ad={a} onOpen={() => setPreview(a)} />
-                      <span>
-                        {a.name}
-                        <span className="tree-count">
-                          {a.campaignName ?? campaignName.get(a.campaignId) ?? "—"} › {a.adSetName ?? setName.get(a.adSetId) ?? "—"}
-                        </span>
+                      <div className="ad-text">
+                        <div className="ad-title">{a.name?.trim() || `Anúncio ${a.id || "sem ID"}`}</div>
+                        <div className="ad-sub">
+                          {a.campaignName || campaignName.get(a.campaignId) || "—"} › {a.adSetName || setName.get(a.adSetId) || "—"}
+                        </div>
                         {(a.creative?.thumbnail || a.creative?.image || a.creative?.previewLink) && (
                           <button type="button" className="link-btn small no-print" onClick={() => setPreview(a)}>ver prévia</button>
                         )}
-                      </span>
-                    </span>
+                      </div>
+                    </div>
                   </td>
                   <MetricCells cols={cols} m={a} />
                 </tr>
@@ -267,6 +267,13 @@ export default function MetaAdsDrilldown({ campaigns, breakdown, currency, total
           </tbody>
         </table>
       </div>
+      )}
+      {breakdown && (
+        <p className="muted small" style={{ margin: 0 }}>
+          Diagnóstico: {breakdown.adSets.length} conjuntos · {nAds} anúncios · {breakdown.ads.filter((a) => a.name?.trim()).length} com nome ·{" "}
+          {breakdown.ads.filter((a) => a.creative?.thumbnail || a.creative?.image).length} com imagem ·{" "}
+          {breakdown.ads.filter((a) => a.creative?.previewLink).length} com link de prévia
+        </p>
       )}
       {campaigns.length > 50 && <p className="muted small">Exibindo as 50 campanhas com maior investimento de {campaigns.length}.</p>}
       {!breakdown && (
