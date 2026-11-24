@@ -17,7 +17,7 @@ export async function getLiveData(
   force = false,
 ): Promise<{ data: ReportData; fetchedAt: number }> {
   const key = [client.id, client.meta_ad_account_id, client.meta_conversion_action, client.google_ads_customer_id,
-    client.ga4_property_id, range.start, range.end, await sellbotStamp(client.id)].join("|");
+    client.ga4_property_id, range.start, range.end, await sellbotStamp(client.id).catch(() => "-")].join("|");
   const hit = cache.get(key);
   if (!force && hit && Date.now() - hit.at < TTL_MS) {
     return { data: await hit.data, fetchedAt: hit.at };

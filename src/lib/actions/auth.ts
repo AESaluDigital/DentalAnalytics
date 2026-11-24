@@ -15,7 +15,13 @@ export async function loginAction(_prev: LoginState, form: FormData): Promise<Lo
   const password = String(form.get("password") ?? "").slice(0, 200);
   if (!login || !password) return { error: "Informe usuário e senha." };
 
-  const res = await verifyCredentials(login, password);
+  let res: Awaited<ReturnType<typeof verifyCredentials>>;
+  try {
+    res = await verifyCredentials(login, password);
+  } catch (err) {
+    console.error("[login] falha ao verificar credenciais", err);
+    return { error: "Não foi possível entrar agora (falha temporária no servidor). Tente de novo em alguns segundos." };
+  }
   if (!res.ok) {
     return {
       error: res.pending

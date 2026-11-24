@@ -50,14 +50,38 @@ function Sources({ data, clientId, canManage }: { data: ReportData; clientId: nu
 }
 
 /** Orçamento do mês atual (independe do período escolhido). */
+/** Erro numa seção vira um cartão com a mensagem, sem derrubar o dashboard inteiro. */
+function SectionError({ title, err }: { title: string; err: unknown }) {
+  console.error(`[dashboard] falha em ${title}`, err);
+  return (
+    <section className="card">
+      <h2>{title}</h2>
+      <p className="error" style={{ margin: "8px 0 0" }}>
+        ⚠ Não foi possível carregar esta seção: {err instanceof Error ? err.message : "erro inesperado"}
+      </p>
+    </section>
+  );
+}
+
 async function Budget({ client, canEdit, back, ok, error }: { client: ClientRow; canEdit: boolean; back: string; ok: boolean; error?: string }) {
-  const data = await getBudgetData(client);
+  let data: Awaited<ReturnType<typeof getBudgetData>>;
+  try {
+    data = await getBudgetData(client);
+  } catch (err) {
+    return <SectionError title="Orçamento do mês" err={err} />;
+  }
   if (data.platforms.length === 0) return null;
   return <BudgetSection data={data} clientId={client.id} canEdit={canEdit} back={back} ok={ok} error={error} />;
 }
 
 async function LiveData({ client, start, end, force, canExport, canManage }: { client: ClientRow; start: string; end: string; force: boolean; canExport: boolean; canManage: boolean }) {
-  const { data, fetchedAt } = await getLiveData(client, { start, end }, force);
+  let live: Awaited<ReturnType<typeof getLiveData>>;
+  try {
+    live = await getLiveData(client, { start, end }, force);
+  } catch (err) {
+    return <SectionError title="Dados do período" err={err} />;
+  }
+  const { data, fetchedAt } = live;
   return (
     <>
       <div className="row between no-print">
