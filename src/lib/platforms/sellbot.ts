@@ -220,3 +220,15 @@ export async function hasSellbot(clientId: number): Promise<boolean> {
   await ensureSchema();
   return Boolean(await queryOne("SELECT 1 FROM sellbot_connections WHERE client_id = $1", [clientId]));
 }
+
+/** Conexões de todos os clientes (sem o token), para a tela "Contas Sellbot". */
+export async function listSellbotConnections(): Promise<
+  Map<number, { connectedAt: Date; globalPipelines: string[] | null; connectedBy: string | null }>
+> {
+  await ensureSchema();
+  const rows = await query<{ client_id: number; connected_at: Date; global_pipelines: string[] | null; by: string | null }>(
+    `SELECT s.client_id, s.connected_at, s.global_pipelines, u.name AS by
+     FROM sellbot_connections s LEFT JOIN users u ON u.id = s.connected_by`,
+  );
+  return new Map(rows.map((r) => [r.client_id, { connectedAt: r.connected_at, globalPipelines: r.global_pipelines, connectedBy: r.by }]));
+}

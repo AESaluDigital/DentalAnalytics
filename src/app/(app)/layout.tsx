@@ -14,6 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/clients/new", label: "Novo cliente", icon: "+", group: "Clientes", show: can(user, "manage_clients") },
     { href: "/settings/meta-ads", label: "Contas Meta Ads", icon: "ⓜ", group: "Configurações", show: can(user, "manage_integrations") },
     { href: "/settings/google-ads", label: "Contas Google Ads", icon: "Ⓖ", group: "Configurações", show: can(user, "manage_integrations") },
+    { href: "/settings/sellbot", label: "Contas Sellbot", icon: "$", group: "Configurações", show: can(user, "manage_clients") || can(user, "manage_integrations") },
     { href: "/settings/integrations", label: "Integrações", icon: "⇄", group: "Configurações", show: can(user, "manage_integrations") },
     { href: "/settings/users", label: "Usuários e permissões", icon: "☺", group: "Configurações", show: user.master },
   ];

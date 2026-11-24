@@ -214,6 +214,16 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
         <Link className="btn primary" href="/settings/google-ads">Abrir Contas Google Ads</Link>
       </section>
 
+      <section className="card row between">
+        <div>
+          <h2 style={{ margin: 0 }}>Sellbot (CRM) → clientes (vendas e ROAS real)</h2>
+          <p className="muted small" style={{ margin: "4px 0 0" }}>
+            Conecte o token da API da Sellbot de cada cliente para trazer vendas, funis e o ROAS real.
+          </p>
+        </div>
+        <Link className="btn primary" href="/settings/sellbot">Abrir Contas Sellbot</Link>
+      </section>
+
       <section className="card stack">
         <div className="row between">
           <h2>Contas disponíveis</h2>

@@ -726,3 +726,11 @@ td.actions { text-align: right; }
 .link-btn { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--accent); cursor: pointer; text-align: left; }
 .link-btn:hover { text-decoration: underline; }
 tr.muted td { color: var(--muted); }
+
+/* Contas Sellbot */
+.sellbot-table td { vertical-align: middle; }
+.token-form { flex-wrap: nowrap; }
+.token-form input[type="password"] { width: 280px; flex: 0 0 280px; }
+.token-form .btn { min-width: 104px; }
+tr.row-focus td { background: color-mix(in srgb, var(--brand-teal) 10%, transparent); }
+.badge.sellbot { background: color-mix(in srgb, #00A86B 14%, transparent); color: var(--ink); border-color: color-mix(in srgb, #00A86B 45%, transparent); }

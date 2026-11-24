@@ -2,6 +2,7 @@ import Link from "next/link";
 import { can, requirePermission } from "@/lib/auth";
 import { query } from "@/lib/db";
 import type { ClientRow } from "@/lib/types";
+import { listSellbotConnections } from "@/lib/platforms/sellbot";
 
 interface Row extends ClientRow {
   last_report: Date | null;
@@ -21,6 +22,8 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
      GROUP BY c.id ORDER BY lower(c.name)`,
     [term, showInactive],
   );
+
+  const sellbot = await listSellbotConnections();
 
   return (
     <div className="stack">
@@ -56,7 +59,8 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                 {c.meta_ad_account_id && <span className="badge meta">Meta Ads</span>}
                 {c.google_ads_customer_id && <span className="badge gads">Google Ads</span>}
                 {c.ga4_property_id && <span className="badge ga4">GA4</span>}
-                {!c.meta_ad_account_id && !c.google_ads_customer_id && !c.ga4_property_id && (
+                {sellbot.has(c.id) && <span className="badge sellbot">Sellbot</span>}
+                {!c.meta_ad_account_id && !c.google_ads_customer_id && !c.ga4_property_id && !sellbot.has(c.id) && (
                   <span className="badge">sem contas vinculadas</span>
                 )}
               </div>
