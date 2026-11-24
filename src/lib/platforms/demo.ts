@@ -9,6 +9,7 @@ import type {
   Ga4Data,
   Ga4Totals,
   GoogleAdsBreakdown,
+  MetaBreakdown,
 } from "../types";
 
 /**
@@ -87,6 +88,12 @@ export function demoMeta(accountId: string, conversionAction: string, range: Dat
   const previousTotals = sum(adsSeries(`meta${accountId}`, prev, { ...base, spend: base.spend * 0.92 }));
   totals.reach = Math.round(totals.impressions / 2.3);
   previousTotals.reach = Math.round(previousTotals.impressions / 2.2);
+  const metaCampaigns = campaigns(`meta${accountId}`, totals, [
+    "[Leads] Formulário instantâneo — Público amplo",
+    "[Leads] Lookalike 1% clientes",
+    "[Remarketing] Visitantes 30 dias",
+    "[Mensagens] WhatsApp — Região",
+  ]);
   return {
     accountId,
     currency: "BRL",
@@ -94,13 +101,43 @@ export function demoMeta(accountId: string, conversionAction: string, range: Dat
     totals,
     previousTotals,
     daily,
-    campaigns: campaigns(`meta${accountId}`, totals, [
-      "[Leads] Formulário instantâneo — Público amplo",
-      "[Leads] Lookalike 1% clientes",
-      "[Remarketing] Visitantes 30 dias",
-      "[Mensagens] WhatsApp — Região",
-    ]),
+    campaigns: metaCampaigns,
+    metaBreakdown: demoMetaBreakdown(`meta${accountId}`, metaCampaigns),
   };
+}
+
+/** Imagem fictícia (SVG) para a prévia dos criativos no modo demonstração. */
+function demoImage(text: string, hue: number): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},70%,45%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360},70%,30%)"/></linearGradient></defs><rect width="400" height="400" fill="url(#g)"/><text x="200" y="210" font-family="Arial" font-size="34" font-weight="700" fill="#fff" text-anchor="middle">${text}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function demoMetaBreakdown(id: string, campaignRows: AdsCampaignRow[]): MetaBreakdown {
+  const rand = seeded(`${id}:metabreak`);
+  const out: MetaBreakdown = { adSets: [], ads: [], notes: [] };
+  const setNames = ["Público amplo 25-55", "Interesse: odontologia estética", "Lookalike 1%", "Raio 10 km"];
+  const adNames = ["Vídeo depoimento", "Carrossel antes e depois", "Imagem oferta avaliação", "Reels sorriso"];
+  let n = 0;
+  campaignRows.forEach((c, ci) => {
+    split(c, 2, rand).forEach((sm, si) => {
+      const set = { id: `${c.id}-s${si}`, campaignId: c.id, name: setNames[(ci + si) % setNames.length], ...sm };
+      out.adSets.push(set);
+      split(set, 3, rand).forEach((am, ai) => {
+        const name = adNames[(ci + si + ai) % adNames.length];
+        out.ads.push({
+          id: `${set.id}-a${ai}`, campaignId: c.id, adSetId: set.id, name: `${name} ${ai + 1}`, ...am,
+          creative: {
+            thumbnail: demoImage(name.split(" ")[0], (n++ * 47) % 360),
+            image: demoImage(name, (n * 47) % 360),
+            title: "Avaliação gratuita com especialista",
+            body: "Agende sua avaliação e conheça os tratamentos da clínica. Parcelamos em até 12x.",
+            previewLink: null,
+          },
+        });
+      });
+    });
+  });
+  return out;
 }
 
 /** Divide as métricas de "parent" em partes com pesos aleatórios (determinísticos). */

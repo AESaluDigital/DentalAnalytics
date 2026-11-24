@@ -77,6 +77,37 @@ export interface GoogleAdsBreakdown {
   notes: string[];
 }
 
+export interface MetaAdSetRow extends AdsMetrics {
+  id: string;
+  campaignId: string;
+  name: string;
+}
+
+/** Prévia do criativo (URLs da Meta expiram depois de alguns dias em relatórios salvos). */
+export interface MetaCreative {
+  thumbnail: string | null;
+  image: string | null;
+  title: string | null;
+  body: string | null;
+  /** Link de prévia do anúncio no Facebook. */
+  previewLink: string | null;
+}
+
+export interface MetaAdRow extends AdsMetrics {
+  id: string;
+  campaignId: string;
+  adSetId: string;
+  name: string;
+  creative: MetaCreative | null;
+}
+
+/** Detalhamento da Meta: conjuntos de anúncios e anúncios (criativos). */
+export interface MetaBreakdown {
+  adSets: MetaAdSetRow[];
+  ads: MetaAdRow[];
+  notes: string[];
+}
+
 export interface AdsPlatformData {
   accountId: string;
   currency: string;
@@ -88,6 +119,8 @@ export interface AdsPlatformData {
   campaigns: AdsCampaignRow[];
   /** Só Google Ads. Ausente em relatórios antigos. */
   breakdown?: GoogleAdsBreakdown;
+  /** Só Meta Ads. Ausente em relatórios antigos. */
+  metaBreakdown?: MetaBreakdown;
 }
 
 export interface Ga4Totals {

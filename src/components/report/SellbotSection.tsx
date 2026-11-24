@@ -8,6 +8,7 @@ import { delta, ratio } from "@/lib/metrics";
 import type { DateRange, SellbotData, SellbotEntry, SellbotPipelineData } from "@/lib/types";
 import InfoTip from "../InfoTip";
 import { DailyLineChart } from "./Charts";
+import UtmTree from "./UtmTree";
 
 const COLOR = "#00A86B";
 
@@ -142,10 +143,6 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
     return groupEntries(v.entries, (e) => e.campaign ?? "(sem campanha)", adOf);
   }, [v.entries, campaigns]);
 
-  const byUtm = useMemo(
-    () => groupEntries(v.entries, (e) => [e.utm.source, e.utm.medium, e.utm.campaign, e.utm.term, e.utm.content].join("|"), (e) => e.utm),
-    [v.entries],
-  );
 
   // Sem atribuição: nem UTM nem campanha (leads do Meta Lead Ads já trazem a campanha da Meta).
   const noUtm = v.entries.filter((e) => !e.utm.source && !e.utm.campaign && !e.campaign && !e.metaCampaignId).length;
@@ -320,34 +317,7 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
         </div>
       </div>
 
-      {byUtm.length > 0 && (
-        <div>
-          <h3 className="chart-title">Leads e vendas por UTM</h3>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>utm_source</th><th>utm_medium</th><th>utm_campaign</th><th>utm_term</th><th>utm_content</th>
-                  <th className="num">Leads</th><th className="num">Vendas</th><th className="num">Faturamento</th>
-                </tr>
-              </thead>
-              <tbody>
-                {byUtm.slice(0, 50).map(({ key, extra: u, leads, won, value }) => (
-                  <tr key={key}>
-                    {[u.source, u.medium, u.campaign, u.term, u.content].map((x, j) => (
-                      <td key={j} className={x ? undefined : "muted"}>{x ?? "—"}</td>
-                    ))}
-                    <td className="num">{int(leads)}</td>
-                    <td className="num">{int(won)}</td>
-                    <td className="num">{money(value, currency)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {byUtm.length > 50 && <p className="muted small">Exibindo as 50 combinações com mais faturamento/leads de {byUtm.length}.</p>}
-        </div>
-      )}
+      <UtmTree entries={v.entries} currency={currency} />
 
       {v.lostReasons.length > 0 && (
         <div>

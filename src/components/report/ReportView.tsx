@@ -1,11 +1,12 @@
 import { formatDateBr } from "@/lib/dates";
 import { dec, int, money, pct, signedPct } from "@/lib/format";
 import { EMPTY_ADS, adsKpis, delta, ratio, sumAds } from "@/lib/metrics";
-import { adsCols, roasText, roasTone, roasValue } from "@/lib/metric-cols";
+import { roasText, roasTone, roasValue } from "@/lib/metric-cols";
 import { METRIC_HELP, type MetricKey } from "@/lib/metric-help";
 import type { AdsPlatformData, Ga4Data, PlatformResult, ReportAnalysis, ReportData } from "@/lib/types";
 import { CategoryBarChart, DailyBarChart, DailyLineChart } from "./Charts";
 import GoogleAdsDrilldown from "./GoogleAdsDrilldown";
+import MetaAdsDrilldown from "./MetaAdsDrilldown";
 import MainChart from "./MainChart";
 import SellbotSection, { type AdCampaignRef } from "./SellbotSection";
 import InfoTip from "../InfoTip";
@@ -131,37 +132,6 @@ function ChannelText({ analysis, canal }: { analysis: ReportAnalysis | null; can
 
 /* ---------- seções ---------- */
 
-function CampaignTable({ p, hasValue }: { p: AdsPlatformData; hasValue: boolean }) {
-  if (p.campaigns.length === 0) return <p className="muted">Nenhuma campanha com entrega no período.</p>;
-  const cols = adsCols(p.currency, p.totals.spend, hasValue);
-  return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Campanha</th>
-            {cols.map((c) => <HelpTh key={c.key} label={c.label} help={c.help} />)}
-          </tr>
-        </thead>
-        <tbody>
-          {p.campaigns.slice(0, 25).map((c) => (
-            <tr key={c.id || c.name}>
-              <td className="name">{c.name}</td>
-              {cols.map((col) => {
-                const tone = col.tone?.(c);
-                return <td key={col.key} className={`num${tone ? ` ${tone}` : ""}`}>{col.value(c)}</td>;
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {p.campaigns.length > 25 && (
-        <p className="muted small">Exibindo as 25 campanhas com maior investimento de {p.campaigns.length}.</p>
-      )}
-    </div>
-  );
-}
-
 function AdsSection({
   title,
   p,
@@ -230,12 +200,13 @@ function AdsSection({
         </div>
       </div>
 
-      <h3 className="chart-title">{canal === "google_ads" ? "Campanhas, grupos, palavras-chave e termos" : "Campanhas"}</h3>
+      <h3 className="chart-title">{canal === "google_ads" ? "Campanhas, grupos, palavras-chave e termos" : "Campanhas, conjuntos e anúncios"}</h3>
       {canal === "google_ads" ? (
         <GoogleAdsDrilldown campaigns={p.campaigns} breakdown={p.breakdown} currency={cur}
           totalSpend={p.totals.spend} hasValue={hasValue} />
       ) : (
-        <CampaignTable p={p} hasValue={hasValue} />
+        <MetaAdsDrilldown campaigns={p.campaigns} breakdown={p.metaBreakdown} currency={cur}
+          totalSpend={p.totals.spend} hasValue={hasValue} />
       )}
     </section>
   );

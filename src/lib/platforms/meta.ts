@@ -3,7 +3,17 @@ import { createHmac } from "node:crypto";
 import { env } from "../env";
 import { metaAccessToken } from "../integrations";
 import { eachDay } from "../dates";
-import type { AdsCampaignRow, AdsDailyRow, AdsPlatformData, AdsTotals, DateRange } from "../types";
+import type {
+  AdsCampaignRow,
+  AdsDailyRow,
+  AdsPlatformData,
+  AdsTotals,
+  DateRange,
+  MetaAdRow,
+  MetaAdSetRow,
+  MetaBreakdown,
+  MetaCreative,
+} from "../types";
 import { PlatformError, fetchJson, num } from "./http";
 
 /**
@@ -27,6 +37,10 @@ interface InsightRow {
   account_currency?: string;
   campaign_id?: string;
   campaign_name?: string;
+  adset_id?: string;
+  adset_name?: string;
+  ad_id?: string;
+  ad_name?: string;
   date_start?: string;
 }
 
@@ -95,6 +109,103 @@ function toTotals(row: InsightRow | undefined, conversionAction: string): AdsTot
   };
 }
 
+/* ---------- Detalhamento: conjuntos → anúncios (criativos) ---------- */
+
+const LIMIT_ADS = 300;
+
+function metricsOf(r: InsightRow, conversionAction: string) {
+  return {
+    spend: num(r.spend),
+    impressions: num(r.impressions),
+    clicks: num(r.inline_link_clicks),
+    conversions: actionValue(r.actions, conversionAction),
+    conversionValue: actionValue(r.action_values, conversionAction),
+  };
+}
+
+interface AdLookup {
+  preview_shareable_link?: string;
+  creative?: { thumbnail_url?: string; image_url?: string; title?: string; body?: string };
+}
+
+/** Prévia dos criativos (GET /?ids=…), em lotes de 50 ids. */
+async function creatives(ids: string[]): Promise<Map<string, MetaCreative>> {
+  const { token, secret, version } = await metaCredentials();
+  const out = new Map<string, MetaCreative>();
+  const proof = appSecretProof(token, secret);
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = ids.slice(i, i + 50);
+    const get = async (fields: string) => {
+      const q = new URLSearchParams({ ids: batch.join(","), fields });
+      if (proof) q.set("appsecret_proof", proof);
+      return fetchJson<Record<string, AdLookup>>(PLATFORM, `https://graph.facebook.com/${version}/?${q}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    };
+    let res: Record<string, AdLookup>;
+    try {
+      // Miniatura maior para a prévia; se a API recusar os parâmetros, busca a padrão.
+      res = await get("preview_shareable_link,creative.thumbnail_width(400).thumbnail_height(400){thumbnail_url,image_url,title,body}");
+    } catch {
+      res = await get("preview_shareable_link,creative{thumbnail_url,image_url,title,body}");
+    }
+    for (const [id, a] of Object.entries(res ?? {})) {
+      out.set(id, {
+        thumbnail: a.creative?.thumbnail_url ?? null,
+        image: a.creative?.image_url ?? null,
+        title: a.creative?.title ?? null,
+        body: a.creative?.body ?? null,
+        previewLink: a.preview_shareable_link ?? null,
+      });
+    }
+  }
+  return out;
+}
+
+async function fetchMetaBreakdown(accountId: string, conversionAction: string, range: DateRange): Promise<MetaBreakdown> {
+  const notes: string[] = [];
+  const fields = "spend,impressions,inline_link_clicks,actions,action_values";
+  const soft = async (label: string, fn: () => Promise<InsightRow[]>): Promise<InsightRow[]> => {
+    try {
+      return await fn();
+    } catch (err) {
+      notes.push(`Não foi possível carregar ${label}${err instanceof PlatformError ? `: ${err.message}` : "."}`);
+      return [];
+    }
+  };
+  const [sets, ads] = await Promise.all([
+    soft("os conjuntos de anúncios", () =>
+      insights(accountId, { level: "adset", time_range: timeRange(range), fields: `campaign_id,adset_id,adset_name,${fields}`, sort: "spend_descending", limit: "500" }),
+    ),
+    soft("os anúncios", () =>
+      insights(accountId, { level: "ad", time_range: timeRange(range), fields: `campaign_id,adset_id,ad_id,ad_name,${fields}`, sort: "spend_descending", limit: "500" }),
+    ),
+  ]);
+
+  const withDelivery = ads.filter((a) => num(a.impressions) > 0).sort((a, b) => num(b.spend) - num(a.spend));
+  const topAds = withDelivery.slice(0, LIMIT_ADS);
+  if (withDelivery.length > LIMIT_ADS) notes.push(`Exibindo os ${LIMIT_ADS} anúncios com maior investimento.`);
+  const previews = await creatives(topAds.map((a) => a.ad_id ?? "").filter(Boolean)).catch((err) => {
+    notes.push(`Prévias dos criativos indisponíveis${err instanceof PlatformError ? `: ${err.message}` : "."}`);
+    return new Map<string, MetaCreative>();
+  });
+
+  return {
+    adSets: sets
+      .filter((r) => num(r.impressions) > 0)
+      .map<MetaAdSetRow>((r) => ({ id: r.adset_id ?? "", campaignId: r.campaign_id ?? "", name: r.adset_name ?? "(sem nome)", ...metricsOf(r, conversionAction) })),
+    ads: topAds.map<MetaAdRow>((r) => ({
+      id: r.ad_id ?? "",
+      campaignId: r.campaign_id ?? "",
+      adSetId: r.adset_id ?? "",
+      name: r.ad_name ?? "(sem nome)",
+      creative: previews.get(r.ad_id ?? "") ?? null,
+      ...metricsOf(r, conversionAction),
+    })),
+    notes,
+  };
+}
+
 export async function fetchMeta(
   accountId: string,
   conversionAction: string,
@@ -103,7 +214,7 @@ export async function fetchMeta(
 ): Promise<AdsPlatformData> {
   const totalsFields = "spend,impressions,reach,inline_link_clicks,actions,action_values,account_currency";
 
-  const [current, previous, daily, campaigns] = await Promise.all([
+  const [current, previous, daily, campaigns, metaBreakdown] = await Promise.all([
     insights(accountId, { level: "account", time_range: timeRange(range), fields: totalsFields }),
     insights(accountId, { level: "account", time_range: timeRange(prev), fields: totalsFields }),
     insights(accountId, {
@@ -120,6 +231,7 @@ export async function fetchMeta(
       sort: "spend_descending",
       limit: "100",
     }),
+    fetchMetaBreakdown(accountId, conversionAction, range),
   ]);
 
   const byDate = new Map(daily.map((r) => [r.date_start, r]));
@@ -154,6 +266,7 @@ export async function fetchMeta(
     previousTotals: toTotals(previous[0], conversionAction),
     daily: dailyRows,
     campaigns: campaignRows,
+    metaBreakdown,
   };
 }
 
