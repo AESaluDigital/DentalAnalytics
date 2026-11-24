@@ -38,7 +38,8 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const expired = r.share_expires_at !== null && r.share_expires_at < new Date();
   const shareActive = !r.share_revoked && !expired;
   // Relatório salvo antes de o cliente conectar a Sellbot: avisa que um novo relatório traz as vendas.
-  const missingSales = r.data.sellbot?.status !== "ok" && r.data.sellbot?.status !== "error" && (await hasSellbot(r.client_id));
+  const missingSales =
+    !(r.data.sellbot?.status === "ok" && r.data.sellbot.data.v === 2) && r.data.sellbot?.status !== "error" && (await hasSellbot(r.client_id));
 
   return (
     <div className="stack">
@@ -90,7 +91,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
 
       {missingSales && (
         <p className="notice no-print" role="note">
-          Este relatório foi gerado antes de o cliente conectar a Sellbot, por isso não traz as vendas.{" "}
+          Este relatório foi gerado antes da versão atual da integração com a Sellbot (leads, vendas e UTMs pela data de criação).{" "}
           <Link href={`/reports?client=${r.client_id}&start=${r.data.range.start}&end=${r.data.range.end}`}>
             Gere um novo relatório do mesmo período
           </Link>{" "}

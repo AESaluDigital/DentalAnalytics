@@ -437,6 +437,17 @@ function AnalysisBlock({ analysis }: { analysis: ReportAnalysis | null }) {
 /** Vendas do CRM com o investimento em anúncios do mesmo relatório (ROAS real). */
 function Sales({ data }: { data: ReportData }) {
   if (data.sellbot?.status !== "ok") return null;
+  if (data.sellbot.data.v !== 2) {
+    return (
+      <section className="card report-section">
+        <h2>Vendas — Sellbot (CRM)</h2>
+        <p className="muted" style={{ margin: 0 }}>
+          Este relatório usa o formato antigo das vendas (pela data do ganho). Gere um novo relatório para ver leads, vendas e UTMs
+          pela data de criação.
+        </p>
+      </section>
+    );
+  }
   const paid = [data.meta, data.googleAds].flatMap((r) => (r.status === "ok" ? [r.data] : []));
   const currency = paid[0]?.currency ?? "BRL";
   const same = paid.every((p) => p.currency === currency);

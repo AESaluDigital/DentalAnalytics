@@ -748,3 +748,4 @@ tr.row-focus td { background: color-mix(in srgb, var(--brand-teal) 10%, transpar
 .source-error i { background: var(--bad); }
 .source-not_configured { opacity: 0.75; }
 a .source-not_configured:hover { opacity: 1; border-color: var(--brand-teal); }
+.funnel-total { border-top: 1px dashed var(--border); padding-top: 10px; }

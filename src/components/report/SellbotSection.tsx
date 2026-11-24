@@ -5,13 +5,13 @@ import { eachDay } from "@/lib/dates";
 import { dec, int, money, pct, signedPct } from "@/lib/format";
 import { METRIC_HELP, type MetricKey } from "@/lib/metric-help";
 import { delta, ratio } from "@/lib/metrics";
-import type { DateRange, SellbotData, SellbotPipelineData } from "@/lib/types";
+import type { DateRange, SellbotData, SellbotEntry, SellbotPipelineData } from "@/lib/types";
 import InfoTip from "../InfoTip";
-import { DailyBarChart } from "./Charts";
+import { DailyLineChart } from "./Charts";
 
 const COLOR = "#00A86B";
 
-/** Campanha de anúncio conhecida no relatório, para cruzar com a campanha da venda. */
+/** Campanha de anúncio conhecida no relatório, para cruzar com a campanha do lead. */
 export interface AdCampaignRef {
   id: string;
   name: string;
@@ -57,19 +57,26 @@ function Kpi({ label, help, value, change, lowerIsBetter, note, tone }: {
   );
 }
 
-/** Soma vários funis numa visão só. */
-function combine(list: SellbotPipelineData[]) {
-  return {
-    won: list.reduce((a, p) => ({ count: a.count + p.won.count, value: a.value + p.won.value }), { count: 0, value: 0 }),
-    wonPrev: list.reduce((a, p) => ({ count: a.count + p.wonPrev.count, value: a.value + p.wonPrev.value }), { count: 0, value: 0 }),
-    lost: list.reduce((a, p) => a + p.lost.count, 0),
-    lostPrev: list.reduce((a, p) => a + p.lostPrev.count, 0),
-    open: list.reduce((a, p) => ({ count: a.count + p.open.count, value: a.value + p.open.value }), { count: 0, value: 0 }),
-    sales: list.flatMap((p) => p.sales),
-    lostReasons: [...list.flatMap((p) => p.lostReasons).reduce((m, r) => m.set(r.reason, (m.get(r.reason) ?? 0) + r.count), new Map<string, number>())]
-      .map(([reason, count]) => ({ reason, count }))
-      .sort((a, b) => b.count - a.count),
-  };
+interface Agg {
+  leads: number;
+  won: number;
+  value: number;
+}
+
+/** Agrupa as entradas por uma chave, somando leads, vendas e faturamento. */
+function groupEntries<K>(entries: SellbotEntry[], keyOf: (e: SellbotEntry) => string, extra: (e: SellbotEntry) => K) {
+  const m = new Map<string, Agg & { extra: K }>();
+  for (const e of entries) {
+    const k = keyOf(e);
+    const x = m.get(k) ?? { leads: 0, won: 0, value: 0, extra: extra(e) };
+    x.leads++;
+    if (e.status === "won") {
+      x.won++;
+      x.value += e.value;
+    }
+    m.set(k, x);
+  }
+  return [...m.entries()].map(([key, x]) => ({ key, ...x })).sort((a, b) => b.value - a.value || b.leads - a.leads);
 }
 
 const norm = (s: string) => s.trim().toLowerCase();
@@ -78,66 +85,79 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
   const global = data.pipelines.filter((p) => p.inGlobal);
   const [sel, setSel] = useState<string>("global");
   const pipeline = data.pipelines.find((p) => p.id === sel) ?? null;
-  const v = useMemo(() => combine(pipeline ? [pipeline] : global), [pipeline, global]);
+  const picked: SellbotPipelineData[] = pipeline ? [pipeline] : global;
 
-  const ticket = ratio(v.won.value, v.won.count);
-  const roas = adSpend ? ratio(v.won.value, adSpend) : null;
-  const roasPrev = adSpendPrev ? ratio(v.wonPrev.value, adSpendPrev) : null;
-  const winRate = ratio(v.won.count, v.won.count + v.lost);
-  const winRatePrev = ratio(v.wonPrev.count, v.wonPrev.count + v.lostPrev);
+  const v = useMemo(() => {
+    const entries = picked.flatMap((p) => p.entries);
+    const wonList = entries.filter((e) => e.status === "won");
+    const lostList = entries.filter((e) => e.status === "lost");
+    const openList = entries.filter((e) => e.status === "open");
+    const reasons = new Map<string, number>();
+    for (const e of lostList) {
+      const r = e.lostReason ?? "Sem motivo informado";
+      reasons.set(r, (reasons.get(r) ?? 0) + 1);
+    }
+    return {
+      entries,
+      created: entries.length,
+      won: wonList.length,
+      wonValue: wonList.reduce((a, e) => a + e.value, 0),
+      lost: lostList.length,
+      open: openList.length,
+      openValue: openList.reduce((a, e) => a + e.value, 0),
+      prev: picked.reduce(
+        (a, p) => ({ created: a.created + p.prev.created, won: a.won + p.prev.won, wonValue: a.wonValue + p.prev.wonValue, lost: a.lost + p.prev.lost }),
+        { created: 0, won: 0, wonValue: 0, lost: 0 },
+      ),
+      lostReasons: [...reasons.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
+    };
+  }, [picked]);
+
+  const ticket = ratio(v.wonValue, v.won);
+  const roas = adSpend ? ratio(v.wonValue, adSpend) : null;
+  const roasPrev = adSpendPrev ? ratio(v.prev.wonValue, adSpendPrev) : null;
+  const leadToSale = ratio(v.won, v.created);
 
   const daily = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const s of v.sales) m.set(s.date, (m.get(s.date) ?? 0) + s.value);
-    return eachDay(range).map((date) => ({ date, revenue: m.get(date) ?? 0 }));
-  }, [v.sales, range]);
-
-  const bySource = useMemo(() => {
-    const m = new Map<string, { count: number; value: number }>();
-    for (const s of v.sales) {
-      const x = m.get(s.source) ?? { count: 0, value: 0 };
-      m.set(s.source, { count: x.count + 1, value: x.value + s.value });
+    const leads = new Map<string, number>();
+    const sales = new Map<string, number>();
+    for (const e of v.entries) {
+      leads.set(e.date, (leads.get(e.date) ?? 0) + 1);
+      if (e.status === "won") sales.set(e.date, (sales.get(e.date) ?? 0) + 1);
     }
-    return [...m.entries()].map(([source, x]) => ({ source, ...x })).sort((a, b) => b.value - a.value);
-  }, [v.sales]);
+    return eachDay(range).map((date) => ({ date, leads: leads.get(date) ?? 0, sales: sales.get(date) ?? 0 }));
+  }, [v.entries, range]);
 
-  // Cruza a campanha da venda com as campanhas de anúncio do relatório (por ID ou nome).
+  const bySource = useMemo(() => groupEntries(v.entries, (e) => e.source, () => null), [v.entries]);
+
+  // Cruza a campanha do lead com as campanhas de anúncio do relatório (por ID ou nome).
   const byCampaign = useMemo(() => {
     const index = new Map<string, AdCampaignRef>();
     for (const c of campaigns) {
       if (c.id) index.set(norm(c.id), c);
       index.set(norm(c.name), c);
     }
-    const m = new Map<string, { count: number; value: number; ad: AdCampaignRef | null }>();
-    for (const s of v.sales) {
-      const label = s.campaign ?? "(sem campanha)";
-      const ad = (s.metaCampaignId && index.get(norm(s.metaCampaignId))) || (s.campaign && index.get(norm(s.campaign))) || null;
-      const x = m.get(label) ?? { count: 0, value: 0, ad };
-      m.set(label, { count: x.count + 1, value: x.value + s.value, ad: x.ad ?? ad });
-    }
-    return [...m.entries()].map(([campaign, x]) => ({ campaign, ...x })).sort((a, b) => b.value - a.value);
-  }, [v.sales, campaigns]);
+    const adOf = (e: SellbotEntry) =>
+      (e.metaCampaignId && index.get(norm(e.metaCampaignId))) || (e.campaign && index.get(norm(e.campaign))) || null;
+    return groupEntries(v.entries, (e) => e.campaign ?? "(sem campanha)", adOf);
+  }, [v.entries, campaigns]);
 
-  // Detalhe por combinação de UTMs (source / medium / campaign / term / content).
-  const byUtm = useMemo(() => {
-    const m = new Map<string, { u: NonNullable<(typeof v.sales)[number]["utm"]>; count: number; value: number }>();
-    for (const s of v.sales) {
-      const u = s.utm ?? { source: null, medium: null, campaign: null, term: null, content: null };
-      const k = [u.source, u.medium, u.campaign, u.term, u.content].join("|");
-      const x = m.get(k) ?? { u, count: 0, value: 0 };
-      m.set(k, { u, count: x.count + 1, value: x.value + s.value });
-    }
-    return [...m.values()].sort((a, b) => b.value - a.value);
-  }, [v.sales]);
-  const hasUtmData = v.sales.some((s) => s.utm);
+  const byUtm = useMemo(
+    () => groupEntries(v.entries, (e) => [e.utm.source, e.utm.medium, e.utm.campaign, e.utm.term, e.utm.content].join("|"), (e) => e.utm),
+    [v.entries],
+  );
 
-  const unattributed = v.sales.filter((s) => s.source === "Não identificada" || s.source === "Formulário do site").length;
+  // Sem atribuição: nem UTM nem campanha (leads do Meta Lead Ads já trazem a campanha da Meta).
+  const noUtm = v.entries.filter((e) => !e.utm.source && !e.utm.campaign && !e.campaign && !e.metaCampaignId).length;
   const maxStage = Math.max(1, ...(pipeline?.stages.map((s) => s.count) ?? [1]));
 
   return (
     <section className="card report-section sellbot">
       <div className="row between">
-        <h2 className="section-title"><span className="swatch" style={{ background: COLOR }} aria-hidden /> Vendas — Sellbot (CRM)</h2>
+        <div>
+          <h2 className="section-title"><span className="swatch" style={{ background: COLOR }} aria-hidden /> Vendas — Sellbot (CRM)</h2>
+          <p className="muted small" style={{ margin: "4px 0 0" }}>Leads e negócios criados no período (data de criação).</p>
+        </div>
         <div className="seg" role="group" aria-label="Funil">
           <button type="button" className="btn" aria-pressed={sel === "global"} onClick={() => setSel("global")}>
             Global{global.length !== data.pipelines.length ? ` (${global.length} funis)` : ""}
@@ -151,35 +171,43 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
       </div>
 
       <div className="kpi-grid">
-        <Kpi label="Vendas" help="sales" value={int(v.won.count)} change={delta(v.won.count, v.wonPrev.count)} />
-        <Kpi label="Faturamento" help="salesRevenue" value={money(v.won.value, currency)} change={delta(v.won.value, v.wonPrev.value)} />
-        <Kpi label="Ticket médio" help="ticket" value={money(ticket, currency)}
-          change={delta(ticket, ratio(v.wonPrev.value, v.wonPrev.count))} />
+        <Kpi label="Leads (entrada)" help="crmLeads" value={int(v.created)} change={delta(v.created, v.prev.created)} />
+        <Kpi label="Vendas" help="sales" value={int(v.won)} change={delta(v.won, v.prev.won)} />
+        <Kpi label="Faturamento" help="salesRevenue" value={money(v.wonValue, currency)} change={delta(v.wonValue, v.prev.wonValue)} />
+        <Kpi label="Ticket médio" help="ticket" value={money(ticket, currency)} change={delta(ticket, ratio(v.prev.wonValue, v.prev.won))} />
+        <Kpi label="Lead → venda" help="leadToSale" value={pct(leadToSale, 1)}
+          change={delta(leadToSale, ratio(v.prev.won, v.prev.created))} />
         <Kpi label={pipeline ? "ROAS real (este funil)" : "ROAS real"} help="realRoas"
           value={roas === null ? "—" : `${dec(roas)}x`} change={roas === null ? undefined : delta(roas, roasPrev)}
           tone={roas === null ? undefined : roas >= 1 ? "good" : "bad"}
           note={adSpend ? undefined : "sem investimento em anúncios no período"} />
         {adSpend ? (
-          <Kpi label="Custo por venda" help="costPerSale" value={money(ratio(adSpend, v.won.count), currency)} lowerIsBetter
-            change={delta(ratio(adSpend, v.won.count), adSpendPrev ? ratio(adSpendPrev, v.wonPrev.count) : null)} />
+          <>
+            <Kpi label="Custo por lead (CRM)" help="crmCpl" value={money(ratio(adSpend, v.created), currency)} lowerIsBetter
+              change={delta(ratio(adSpend, v.created), adSpendPrev ? ratio(adSpendPrev, v.prev.created) : null)} />
+            <Kpi label="Custo por venda" help="costPerSale" value={money(ratio(adSpend, v.won), currency)} lowerIsBetter
+              change={delta(ratio(adSpend, v.won), adSpendPrev ? ratio(adSpendPrev, v.prev.won) : null)} />
+          </>
         ) : null}
         {adConversions ? (
-          <Kpi label="Conversões → vendas" help="convToSale" value={pct(ratio(v.won.count, adConversions), 1)}
-            note={`${int(v.won.count)} vendas de ${dec(adConversions)} conversões`} />
+          <Kpi label="Conversões → leads CRM" help="convToLead" value={pct(ratio(v.created, adConversions), 1)}
+            note={`${int(v.created)} leads no CRM de ${dec(adConversions)} conversões`} />
         ) : null}
-        <Kpi label="Taxa de ganho" help="winRate" value={pct(winRate)} change={delta(winRate, winRatePrev)} />
-        <Kpi label="Perdidos" help="lost" value={int(v.lost)} change={delta(v.lost, v.lostPrev)} lowerIsBetter />
-        <Kpi label="Em aberto agora" help="openPipeline" value={int(v.open.count)} note={money(v.open.value, currency)} />
+        <Kpi label="Perdidos" help="lost" value={int(v.lost)} change={delta(v.lost, v.prev.lost)} lowerIsBetter />
+        <Kpi label="Ainda em aberto" help="openPipeline" value={int(v.open)} note={money(v.openValue, currency)} />
       </div>
 
       <div className="chart-grid">
         <div>
-          <h3 className="chart-title">Faturamento por dia (data do ganho)</h3>
-          <DailyBarChart data={daily} dataKey="revenue" label="Faturamento" color={COLOR} format="money" currency={currency} />
+          <h3 className="chart-title">Entrada de leads e vendas por dia (data de criação)</h3>
+          <DailyLineChart data={daily} format="int" series={[
+            { key: "leads", label: "Leads", color: COLOR },
+            { key: "sales", label: "Vendas", color: "var(--series-2)" },
+          ]} />
         </div>
         {pipeline ? (
           <div>
-            <h3 className="chart-title">Funil {pipeline.name} — negócios abertos por etapa</h3>
+            <h3 className="chart-title">Funil {pipeline.name} — leads do período em aberto, por etapa</h3>
             {pipeline.stages.length === 0 ? <p className="muted">Etapas indisponíveis.</p> : (
               <div className="funnel">
                 {pipeline.stages.map((s) => (
@@ -190,6 +218,12 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
                     <span className="funnel-val muted">{money(s.value, currency)}</span>
                   </div>
                 ))}
+                <div className="funnel-row funnel-total">
+                  <span className="funnel-name">Ganhos / perdidos</span>
+                  <span className="muted small">dos {int(v.created)} leads do período</span>
+                  <span className="funnel-num">{int(v.won)}</span>
+                  <span className="funnel-val muted">{int(v.lost)} perdidos</span>
+                </div>
               </div>
             )}
           </div>
@@ -201,6 +235,7 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
                 <thead>
                   <tr>
                     <th>Funil</th>
+                    <th className="num">Leads</th>
                     <th className="num">Vendas</th>
                     <th className="num">Faturamento</th>
                     <th className="num">Perdidos</th>
@@ -208,18 +243,22 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
                   </tr>
                 </thead>
                 <tbody>
-                  {data.pipelines.map((p) => (
-                    <tr key={p.id} className={p.inGlobal ? undefined : "muted"}>
-                      <td className="name">
-                        <button type="button" className="link-btn" onClick={() => setSel(p.id)}>{p.name}</button>
-                        {!p.inGlobal && <span className="tree-count">fora da Global</span>}
-                      </td>
-                      <td className="num">{int(p.won.count)}</td>
-                      <td className="num">{money(p.won.value, currency)}</td>
-                      <td className="num">{int(p.lost.count)}</td>
-                      <td className="num">{int(p.open.count)}</td>
-                    </tr>
-                  ))}
+                  {data.pipelines.map((p) => {
+                    const won = p.entries.filter((e) => e.status === "won");
+                    return (
+                      <tr key={p.id} className={p.inGlobal ? undefined : "muted"}>
+                        <td className="name">
+                          <button type="button" className="link-btn" onClick={() => setSel(p.id)}>{p.name}</button>
+                          {!p.inGlobal && <span className="tree-count">fora da Global</span>}
+                        </td>
+                        <td className="num">{int(p.entries.length)}</td>
+                        <td className="num">{int(won.length)}</td>
+                        <td className="num">{money(won.reduce((a, e) => a + e.value, 0), currency)}</td>
+                        <td className="num">{int(p.entries.filter((e) => e.status === "lost").length)}</td>
+                        <td className="num">{int(p.entries.filter((e) => e.status === "open").length)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -229,18 +268,19 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
 
       <div className="chart-grid">
         <div>
-          <h3 className="chart-title">Vendas por origem</h3>
-          {bySource.length === 0 ? <p className="muted">Nenhuma venda no período.</p> : (
+          <h3 className="chart-title">Leads e vendas por origem</h3>
+          {bySource.length === 0 ? <p className="muted">Nenhum lead no período.</p> : (
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Origem</th><th className="num">Vendas</th><th className="num">Faturamento</th><th className="num">%</th></tr></thead>
+                <thead><tr><th>Origem</th><th className="num">Leads</th><th className="num">Vendas</th><th className="num">Conv.</th><th className="num">Faturamento</th></tr></thead>
                 <tbody>
                   {bySource.map((s) => (
-                    <tr key={s.source}>
-                      <td className="name">{s.source}</td>
-                      <td className="num">{int(s.count)}</td>
+                    <tr key={s.key}>
+                      <td className="name">{s.key}</td>
+                      <td className="num">{int(s.leads)}</td>
+                      <td className="num">{int(s.won)}</td>
+                      <td className="num">{pct(ratio(s.won, s.leads), 1)}</td>
                       <td className="num">{money(s.value, currency)}</td>
-                      <td className="num">{pct(ratio(s.value, v.won.value))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -249,24 +289,25 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
           )}
         </div>
         <div>
-          <h3 className="chart-title">Vendas por campanha</h3>
-          {byCampaign.length === 0 ? <p className="muted">Nenhuma venda no período.</p> : (
+          <h3 className="chart-title">Leads e vendas por campanha</h3>
+          {byCampaign.length === 0 ? <p className="muted">Nenhum lead no período.</p> : (
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Campanha</th><th className="num">Vendas</th><th className="num">Faturamento</th>
-                    <th className="num"><span className="th-help">ROAS<InfoTip label="ROAS real da campanha" text="Faturamento das vendas desta campanha ÷ investimento dela no período. Só aparece quando a campanha da venda bate com uma campanha do Meta Ads ou do Google Ads deste relatório." /></span></th></tr>
+                  <tr><th>Campanha</th><th className="num">Leads</th><th className="num">Vendas</th><th className="num">Faturamento</th>
+                    <th className="num"><span className="th-help">ROAS<InfoTip label="ROAS real da campanha" text="Faturamento das vendas desta campanha ÷ investimento dela no período. Só aparece quando a campanha do lead bate com uma campanha do Meta Ads ou do Google Ads deste relatório." /></span></th></tr>
                 </thead>
                 <tbody>
                   {byCampaign.map((c) => {
-                    const r = c.ad ? ratio(c.value, c.ad.spend) : null;
+                    const r = c.extra ? ratio(c.value, c.extra.spend) : null;
                     return (
-                      <tr key={c.campaign}>
+                      <tr key={c.key}>
                         <td className="name">
-                          {c.ad ? c.ad.name : c.campaign}
-                          {c.ad && <span className="tree-count">{c.ad.platform} · investimento {money(c.ad.spend, currency)}</span>}
+                          {c.extra ? c.extra.name : c.key}
+                          {c.extra && <span className="tree-count">{c.extra.platform} · investimento {money(c.extra.spend, currency)}</span>}
                         </td>
-                        <td className="num">{int(c.count)}</td>
+                        <td className="num">{int(c.leads)}</td>
+                        <td className="num">{int(c.won)}</td>
                         <td className="num">{money(c.value, currency)}</td>
                         <td className={`num${r === null ? "" : r >= 1 ? " roas-good" : " roas-bad"}`}>{r === null ? "—" : `${dec(r)}x`}</td>
                       </tr>
@@ -279,36 +320,38 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
         </div>
       </div>
 
-      {hasUtmData && byUtm.length > 0 && (
+      {byUtm.length > 0 && (
         <div>
-          <h3 className="chart-title">Vendas por UTM</h3>
+          <h3 className="chart-title">Leads e vendas por UTM</h3>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>utm_source</th><th>utm_medium</th><th>utm_campaign</th><th>utm_term</th><th>utm_content</th>
-                  <th className="num">Vendas</th><th className="num">Faturamento</th>
+                  <th className="num">Leads</th><th className="num">Vendas</th><th className="num">Faturamento</th>
                 </tr>
               </thead>
               <tbody>
-                {byUtm.map(({ u, count, value }, i) => (
-                  <tr key={i}>
+                {byUtm.slice(0, 50).map(({ key, extra: u, leads, won, value }) => (
+                  <tr key={key}>
                     {[u.source, u.medium, u.campaign, u.term, u.content].map((x, j) => (
                       <td key={j} className={x ? undefined : "muted"}>{x ?? "—"}</td>
                     ))}
-                    <td className="num">{int(count)}</td>
+                    <td className="num">{int(leads)}</td>
+                    <td className="num">{int(won)}</td>
                     <td className="num">{money(value, currency)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {byUtm.length > 50 && <p className="muted small">Exibindo as 50 combinações com mais faturamento/leads de {byUtm.length}.</p>}
         </div>
       )}
 
       {v.lostReasons.length > 0 && (
         <div>
-          <h3 className="chart-title">Principais motivos de perda</h3>
+          <h3 className="chart-title">Principais motivos de perda (leads do período)</h3>
           <div className="reason-list">
             {v.lostReasons.slice(0, 8).map((r) => (
               <span key={r.reason} className="badge">{r.reason} · {int(r.count)}</span>
@@ -317,10 +360,10 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
         </div>
       )}
 
-      {v.won.count > 0 && unattributed / v.won.count > 0.3 && (
+      {v.created > 0 && noUtm / v.created > 0.3 && (
         <p className="muted small" style={{ margin: 0 }}>
-          ⓘ {int(unattributed)} de {int(v.won.count)} vendas não têm a origem do anúncio (UTM). Para melhorar o ROAS por
-          campanha, envie os UTMs/gclid no formulário do site para a Sellbot.
+          ⓘ {int(noUtm)} de {int(v.created)} leads chegaram sem UTM nem campanha. Para atribuir melhor por campanha, envie os UTMs/gclid no
+          formulário do site e nos links dos anúncios para a Sellbot.
         </p>
       )}
       {data.notes.map((n) => <p key={n} className="muted small" style={{ margin: 0 }}>ⓘ {n}</p>)}

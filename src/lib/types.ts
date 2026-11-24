@@ -124,26 +124,36 @@ export interface Ga4Data {
 
 /* ---------- Sellbot (CRM de vendas) ---------- */
 
-/** Venda (negócio ganho) sem dados pessoais: só data, valor e origem. */
-export interface SellbotSale {
-  /** YYYY-MM-DD (data do ganho) */
+export interface SellbotUtm {
+  source: string | null;
+  medium: string | null;
+  campaign: string | null;
+  term: string | null;
+  content: string | null;
+}
+
+/**
+ * Negócio (lead que entrou no funil) CRIADO no período — sem dados pessoais.
+ * Todos os números da Sellbot seguem a data de criação do negócio.
+ */
+export interface SellbotEntry {
+  /** YYYY-MM-DD (data de criação) */
   date: string;
+  status: "won" | "lost" | "open";
   value: number;
-  pipelineId: string;
   /** Origem legível (ex.: google / cpc, Meta Lead Ads, Formulário do site). */
   source: string;
-  /** Campanha (utm_campaign, campanha da Meta ou do lead), quando houver. */
+  /** Campanha (campanha da Meta, utm_campaign ou campanha do lead), quando houver. */
   campaign: string | null;
-  /** ID da campanha da Meta, quando o lead veio de Lead Ads. */
   metaCampaignId: string | null;
-  /** UTMs brutas do negócio (ausentes em relatórios gerados antes desta versão). */
-  utm?: { source: string | null; medium: string | null; campaign: string | null; term: string | null; content: string | null };
+  utm: SellbotUtm;
+  lostReason: string | null;
 }
 
 export interface SellbotStage {
   id: string;
   name: string;
-  /** Negócios abertos nesta etapa agora. */
+  /** Negócios criados no período que estão abertos nesta etapa. */
   count: number;
   value: number;
 }
@@ -153,17 +163,15 @@ export interface SellbotPipelineData {
   name: string;
   /** Entra na soma da visão Global. */
   inGlobal: boolean;
-  won: { count: number; value: number };
-  wonPrev: { count: number; value: number };
-  lost: { count: number; value: number };
-  lostPrev: { count: number };
-  open: { count: number; value: number };
+  entries: SellbotEntry[];
+  /** Mesmos números para os negócios criados no período anterior (comparação). */
+  prev: { created: number; won: number; wonValue: number; lost: number };
   stages: SellbotStage[];
-  sales: SellbotSale[];
-  lostReasons: { reason: string; count: number }[];
 }
 
 export interface SellbotData {
+  /** 2 = tudo pela data de criação (versão atual). Relatórios antigos não têm este campo. */
+  v?: 2;
   pipelines: SellbotPipelineData[];
   notes: string[];
 }

@@ -1,7 +1,7 @@
 import "server-only";
 import { query, queryOne, ensureSchema } from "../db";
 import { decryptSecret, encryptSecret } from "../crypto";
-import type { DateRange, SellbotData, SellbotPipelineData, SellbotSale } from "../types";
+import type { DateRange, SellbotData, SellbotEntry, SellbotPipelineData } from "../types";
 import { PlatformError, fetchJson, num } from "./http";
 
 /**
@@ -11,7 +11,7 @@ import { PlatformError, fetchJson, num } from "./http";
  *
  * Comportamento verificado na API:
  * - GET /crm/deals sem status traz só os abertos;
- * - com status=won|lost, date_from/date_to filtram pela data do fechamento (ganho/perda);
+ * - com status=won|lost, date_from/date_to filtram pela data do fechamento (ganho/perda) — o site refiltra pela criação;
  * - limit aceita até 1000 por página.
  */
 const BASE = "https://api.sellbot.tech/v1";
@@ -32,6 +32,7 @@ interface Deal {
   deal_value?: number | string | null;
   deal_stage_id?: string | null;
   deal_source_channel?: string | null;
+  deal_date_added?: string | null;
   deal_date_won?: string | null;
   deal_date_closed?: string | null;
   deal_lost_reason?: string | null;
@@ -97,8 +98,13 @@ function sourceOf(d: Deal): string {
 }
 
 const day = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : "");
-const sum = (l: Deal[]) => l.reduce((a, d) => a + num(d.deal_value), 0);
+const inRange = (d: string, r: DateRange) => d >= r.start && d <= r.end;
 
+/**
+ * Tudo pela DATA DE CRIAÇÃO do negócio (entrada do lead no funil).
+ * Ganhos/perdidos: a API filtra date_from/date_to pela data de fechamento; como o fechamento é sempre
+ * depois da criação, buscamos os fechados desde o início do período anterior e filtramos pela criação aqui.
+ */
 async function pipelineData(
   token: string,
   p: { id: string; name: string },
@@ -107,39 +113,42 @@ async function pipelineData(
   prev: DateRange,
   notes: string[],
 ): Promise<SellbotPipelineData> {
-  const by = (status: string, r: DateRange) => deals(token, { pipeline_id: p.id, status, date_from: r.start, date_to: r.end });
-  const [stages, won, wonPrev, lost, lostPrev, open] = await Promise.all([
+  const today = new Date().toISOString().slice(0, 10);
+  const closed = (status: string) => deals(token, { pipeline_id: p.id, status, date_from: prev.start, date_to: today });
+  const [stages, won, lost, open] = await Promise.all([
     stagesOf(token, p.id).catch(() => [] as { id: string; name: string }[]),
-    by("won", range),
-    by("won", prev),
-    by("lost", range),
-    by("lost", prev),
+    closed("won"),
+    closed("lost"),
     deals(token, { pipeline_id: p.id, status: "open" }),
   ]);
-  if ([won, wonPrev, lost, lostPrev, open].some((x) => x.truncated)) {
+  if ([won, lost, open].some((x) => x.truncated)) {
     notes.push(`Funil ${p.name}: muitos negócios; parte dos dados foi limitada a ${PAGE * MAX_PAGES} por consulta.`);
   }
 
+  const all: { d: Deal; status: "won" | "lost" | "open" }[] = [
+    ...won.list.map((d) => ({ d, status: "won" as const })),
+    ...lost.list.map((d) => ({ d, status: "lost" as const })),
+    ...open.list.map((d) => ({ d, status: "open" as const })),
+  ];
+  const created = (r: DateRange) => all.filter((x) => inRange(day(x.d.deal_date_added), r));
+  const cur = created(range);
+  const old = created(prev);
+
   const stageMap = new Map(stages.map((s) => [s.id, { ...s, count: 0, value: 0 }]));
-  for (const d of open.list) {
-    const s = d.deal_stage_id ? stageMap.get(d.deal_stage_id) : undefined;
-    if (s) {
-      s.count++;
-      s.value += num(d.deal_value);
+  for (const { d, status } of cur) {
+    if (status !== "open") continue;
+    const st = d.deal_stage_id ? stageMap.get(d.deal_stage_id) : undefined;
+    if (st) {
+      st.count++;
+      st.value += num(d.deal_value);
     }
   }
 
-  const reasons = new Map<string, number>();
-  for (const d of lost.list) {
-    const r = d.deal_lost_reason?.trim() || "Sem motivo informado";
-    reasons.set(r, (reasons.get(r) ?? 0) + 1);
-  }
-
-  const sales: SellbotSale[] = won.list
-    .map((d) => ({
-      date: day(d.deal_date_won ?? d.deal_date_closed),
+  const entries: SellbotEntry[] = cur
+    .map(({ d, status }) => ({
+      date: day(d.deal_date_added),
+      status,
       value: num(d.deal_value),
-      pipelineId: p.id,
       source: sourceOf(d),
       campaign: d.meta_campaign_name || d.utm_campaign || d.lead_campaign || null,
       metaCampaignId: d.meta_campaign_id || null,
@@ -150,21 +159,23 @@ async function pipelineData(
         term: d.utm_term || null,
         content: d.utm_content || null,
       },
+      lostReason: status === "lost" ? d.deal_lost_reason?.trim() || "Sem motivo informado" : null,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  const oldWon = old.filter((x) => x.status === "won");
   return {
     id: p.id,
     name: p.name,
     inGlobal,
-    won: { count: won.list.length, value: sum(won.list) },
-    wonPrev: { count: wonPrev.list.length, value: sum(wonPrev.list) },
-    lost: { count: lost.list.length, value: sum(lost.list) },
-    lostPrev: { count: lostPrev.list.length },
-    open: { count: open.list.length, value: sum(open.list) },
+    entries,
+    prev: {
+      created: old.length,
+      won: oldWon.length,
+      wonValue: oldWon.reduce((a, x) => a + num(x.d.deal_value), 0),
+      lost: old.filter((x) => x.status === "lost").length,
+    },
     stages: [...stageMap.values()],
-    sales,
-    lostReasons: [...reasons.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
   };
 }
 
@@ -223,7 +234,7 @@ export async function fetchSellbotForClient(clientId: number, range: DateRange, 
       pipelineData(conn.token, p, conn.globalPipelines === null || conn.globalPipelines.includes(p.id), range, prev, notes),
     ),
   );
-  return { pipelines: data, notes };
+  return { v: 2, pipelines: data, notes };
 }
 
 export async function hasSellbot(clientId: number): Promise<boolean> {
