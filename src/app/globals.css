@@ -909,7 +909,11 @@ input:focus-visible, select:focus-visible { box-shadow: 0 0 0 4px color-mix(in s
 .legal-head img { height: 32px; width: auto; }
 .legal-head h1 { margin: 14px 0 0; }
 .legal-head p { margin: 0; }
-.legal { display: grid; gap: 22px; line-height: 1.7; }
+/* minmax(0, 1fr): a tabela não pode alargar a coluna além do cartão. */
+.legal { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; line-height: 1.7; overflow-wrap: break-word; }
+.legal > * { min-width: 0; }
+.legal th, .legal td { white-space: normal; }
+.legal td:first-child { min-width: 200px; }
 .legal h2 { font-size: 1.15rem; margin: 0 0 8px; scroll-margin-top: 20px; }
 .legal h3 { font-size: 0.98rem; margin: 14px 0 6px; }
 .legal p, .legal ul { margin: 0 0 8px; }
