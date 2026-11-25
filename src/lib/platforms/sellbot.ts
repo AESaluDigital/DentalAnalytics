@@ -1,6 +1,7 @@
 import "server-only";
 import { query, queryOne, ensureSchema } from "../db";
 import { decryptSecret, encryptSecret } from "../crypto";
+import { platformFromSource } from "../attribution";
 import type { DateRange, SellbotData, SellbotEntry, SellbotPipelineData } from "../types";
 import { PlatformError, fetchJson, num } from "./http";
 
@@ -144,8 +145,7 @@ async function pipelineData(
     }
   }
 
-  const entries: SellbotEntry[] = cur
-    .map(({ d, status }) => ({
+  const entryOf = ({ d, status }: { d: Deal; status: "won" | "lost" | "open" }): SellbotEntry => ({
       date: day(d.deal_date_added),
       status,
       value: num(d.deal_value),
@@ -160,10 +160,25 @@ async function pipelineData(
         content: d.utm_content || null,
       },
       lostReason: status === "lost" ? d.deal_lost_reason?.trim() || "Sem motivo informado" : null,
-    }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  });
+  const entries = cur.map(entryOf).sort((a, b) => a.date.localeCompare(b.date));
 
   const oldWon = old.filter((x) => x.status === "won");
+  // Período anterior por plataforma (ROAS do Meta/Google pelas vendas do CRM): pela origem do lead;
+  // as vendas sem origem identificada ficam somadas por campanha, para cruzar com as campanhas do relatório.
+  const wonValueByPlatform = { meta: 0, google: 0 };
+  const byCampaign = new Map<string, { metaCampaignId: string | null; campaign: string | null; value: number }>();
+  for (const x of oldWon) {
+    const e = entryOf(x);
+    const pl = platformFromSource(e);
+    if (pl) wonValueByPlatform[pl] += e.value;
+    else if (e.metaCampaignId || e.campaign) {
+      const k = `${e.metaCampaignId ?? ""}|${e.campaign ?? ""}`;
+      const c = byCampaign.get(k) ?? { metaCampaignId: e.metaCampaignId, campaign: e.campaign, value: 0 };
+      c.value += e.value;
+      byCampaign.set(k, c);
+    }
+  }
   return {
     id: p.id,
     name: p.name,
@@ -174,6 +189,8 @@ async function pipelineData(
       won: oldWon.length,
       wonValue: oldWon.reduce((a, x) => a + num(x.d.deal_value), 0),
       lost: old.filter((x) => x.status === "lost").length,
+      wonValueByPlatform,
+      wonByCampaign: [...byCampaign.values()],
     },
     stages: [...stageMap.values()],
   };

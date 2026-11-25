@@ -2,6 +2,7 @@ import { formatDateBr } from "@/lib/dates";
 import { dec, int, money, pct, signedPct } from "@/lib/format";
 import { EMPTY_ADS, adsKpis, delta, ratio, sumAds } from "@/lib/metrics";
 import { roasText, roasTone, roasValue } from "@/lib/metric-cols";
+import { crmRevenueByPlatform, type AdPlatform } from "@/lib/attribution";
 import { METRIC_HELP, type MetricKey } from "@/lib/metric-help";
 import type { AdsPlatformData, ConversionTypeRow, Ga4Data, PlatformResult, ReportAnalysis, ReportData } from "@/lib/types";
 import { CategoryBarChart, DailyBarChart, DailyLineChart } from "./Charts";
@@ -77,25 +78,61 @@ function KpiGrid({ items, roas }: { items: Kpi[]; roas?: React.ReactNode }) {
   );
 }
 
+/** ROAS pelas vendas do CRM: faturamento atribuído à(s) plataforma(s) ÷ investimento. */
+interface CrmRoas {
+  revenue: number;
+  value: number | null;
+  prev: number | null;
+}
+
+/** ROAS pelo CRM de uma ou mais plataformas; undefined sem CRM conectado (aí vale o ROAS da plataforma). */
+function crmRoasOf(data: ReportData, platforms: AdPlatform | AdPlatform[]): CrmRoas | undefined {
+  const crm = crmRevenueByPlatform(data);
+  if (!crm) return undefined;
+  const list = Array.isArray(platforms) ? platforms : [platforms];
+  const ads = (pl: AdPlatform) => {
+    const r = pl === "meta" ? data.meta : data.googleAds;
+    return r.status === "ok" ? r.data : null;
+  };
+  const spend = list.reduce((a, pl) => a + (ads(pl)?.totals.spend ?? 0), 0);
+  const spendPrev = list.reduce((a, pl) => a + (ads(pl)?.previousTotals.spend ?? 0), 0);
+  const revenue = list.reduce((a, pl) => a + crm.cur[pl], 0);
+  const revenuePrev = crm.prev ? list.reduce((a, pl) => a + crm.prev![pl], 0) : null;
+  return {
+    revenue,
+    value: spend > 0 ? revenue / spend : null,
+    prev: revenuePrev !== null && spendPrev > 0 ? revenuePrev / spendPrev : null,
+  };
+}
+
 /** ROAS explicado: valor, frase "R$ X por R$ 1", régua com o ponto de equilíbrio (1x) e variação. */
-function RoasCard({ value, prev, currency }: { value: number | null; prev: number | null; currency: string }) {
+function RoasCard({ value, prev, currency, crm }: { value: number | null; prev: number | null; currency: string; crm?: CrmRoas }) {
+  if (crm) {
+    value = crm.value;
+    prev = crm.prev;
+  }
   const tone = roasTone(value);
   const fill = value === null ? 0 : Math.min(value / 5, 1) * 100;
   return (
     <div className={`kpi kpi-roas${tone ? ` ${tone}` : ""}`} style={{ "--i": 0 } as React.CSSProperties}>
-      <span className="kpi-label">ROAS · retorno sobre o investimento<InfoTip label="ROAS" text={METRIC_HELP.roas} /></span>
+      <span className="kpi-label">
+        ROAS · {crm ? "vendas do CRM" : "retorno sobre o investimento"}
+        <InfoTip label="ROAS" text={crm ? METRIC_HELP.roasCrm : METRIC_HELP.roas} />
+      </span>
       {value === null ? (
         <>
           <span className="kpi-value">—</span>
           <span className="roas-text">
-            As conversões não têm valor em dinheiro configurado. Para ver o ROAS, cadastre o valor das conversões
-            (ex.: ticket médio) na plataforma.
+            {crm
+              ? "Sem investimento no período."
+              : "As conversões não têm valor em dinheiro configurado. Para ver o ROAS, cadastre o valor das conversões (ex.: ticket médio) na plataforma."}
           </span>
         </>
       ) : (
         <>
           <span className="kpi-value">{roasText(value)}</span>
           <span className="roas-text">
+            {crm && <>Vendas no CRM: <strong>{money(crm.revenue, currency)}</strong>. </>}
             <strong>{money(value, currency)}</strong> de retorno para cada {money(1, currency)} investido —{" "}
             {tone === "good" ? "o retorno cobriu o investimento." : "o retorno ainda não cobriu o investimento."}
           </span>
@@ -169,6 +206,7 @@ function AdsSection({
   canal,
   analysis,
   showReach,
+  crm,
 }: {
   title: string;
   p: AdsPlatformData;
@@ -176,6 +214,8 @@ function AdsSection({
   canal: "meta" | "google_ads";
   analysis: ReportAnalysis | null;
   showReach: boolean;
+  /** ROAS pelas vendas do CRM atribuídas a esta plataforma (quando há CRM conectado). */
+  crm?: CrmRoas;
 }) {
   const k = adsKpis(p.totals);
   const kp = adsKpis(p.previousTotals);
@@ -203,6 +243,10 @@ function AdsSection({
     ...(hasValue
       ? [{ label: "Valor de conversão", help: "conversionValue" as const, value: money(p.totals.conversionValue, cur), change: delta(p.totals.conversionValue, p.previousTotals.conversionValue) }]
       : []),
+    // Com o ROAS pelo CRM em destaque, o ROAS que a própria plataforma calcula vira um indicador ao lado.
+    ...(crm && hasValue
+      ? [{ label: "ROAS da plataforma", help: "roas" as const, value: roasText(roasValue(p.totals)), change: delta(roasValue(p.totals), roasValue(p.previousTotals)) }]
+      : []),
   ];
 
   return (
@@ -212,7 +256,7 @@ function AdsSection({
         <span className="muted small">Conversão: {p.conversionLabel}</span>
       </div>
       <ChannelText analysis={analysis} canal={canal} />
-      <KpiGrid items={items} roas={<RoasCard value={roasValue(p.totals)} prev={roasValue(p.previousTotals)} currency={cur} />} />
+      <KpiGrid items={items} roas={<RoasCard value={roasValue(p.totals)} prev={roasValue(p.previousTotals)} currency={cur} crm={crm} />} />
       {p.conversionTypes && (
         <ConversionTypes rows={p.conversionTypes} total={p.conversionTypes.reduce((t, r) => t + r.conversions, 0)} currency={cur} />
       )}
@@ -336,7 +380,9 @@ function Overview({ data }: { data: ReportData }) {
   const totalPrev = paid.reduce((acc, x) => sumAds(acc, x.p.previousTotals), EMPTY_ADS);
   const k = adsKpis(total);
   const kp = adsKpis(totalPrev);
-  const showRoas = sameCurrency && (total.conversionValue > 0 || totalPrev.conversionValue > 0);
+  const plat = (key: string): AdPlatform => (key === "meta" ? "meta" : "google");
+  const crmTotal = sameCurrency ? crmRoasOf(data, paid.map((x) => plat(x.key))) : undefined;
+  const showRoas = sameCurrency && (!!crmTotal || total.conversionValue > 0 || totalPrev.conversionValue > 0);
 
   const items: Kpi[] = [
     ...(sameCurrency
@@ -361,7 +407,7 @@ function Overview({ data }: { data: ReportData }) {
     <section className="card report-section">
       <h2>Visão geral — mídia paga</h2>
       <KpiGrid items={items}
-        roas={showRoas ? <RoasCard value={roasValue(total)} prev={roasValue(totalPrev)} currency={currency} /> : undefined} />
+        roas={showRoas ? <RoasCard value={roasValue(total)} prev={roasValue(totalPrev)} currency={currency} crm={crmTotal} /> : undefined} />
 
       <div className="stack">
         {sameCurrency ? (
@@ -381,13 +427,14 @@ function Overview({ data }: { data: ReportData }) {
                   <HelpTh label="Conversões" help="conversions" />
                   <HelpTh label="Custo/conv." help="cpa" />
                   <HelpTh label="CTR" help="ctr" />
-                  <HelpTh label="ROAS" help="roas" />
+                  <HelpTh label="ROAS" help={crmTotal ? "roasCrm" : "roas"} />
                 </tr>
               </thead>
               <tbody>
                 {paid.map((x) => {
                   const kk = adsKpis(x.p.totals);
-                  const r = roasValue(x.p.totals);
+                  const crm = crmRoasOf(data, plat(x.key));
+                  const r = crm ? crm.value : roasValue(x.p.totals);
                   const tone = roasTone(r);
                   return (
                     <tr key={x.key}>
@@ -503,12 +550,14 @@ export default function ReportView({ data, analysis }: { data: ReportData; analy
       {data.sellbot && <Unavailable result={data.sellbot} name="Vendas — Sellbot" />}
 
       {data.meta.status === "ok" && (
-        <AdsSection title="Meta Ads" p={data.meta.data} color={COLORS.meta} canal="meta" analysis={analysis} showReach />
+        <AdsSection title="Meta Ads" p={data.meta.data} color={COLORS.meta} canal="meta" analysis={analysis} showReach
+          crm={crmRoasOf(data, "meta")} />
       )}
       <Unavailable result={data.meta} name="Meta Ads" />
 
       {data.googleAds.status === "ok" && (
-        <AdsSection title="Google Ads" p={data.googleAds.data} color={COLORS.googleAds} canal="google_ads" analysis={analysis} showReach={false} />
+        <AdsSection title="Google Ads" p={data.googleAds.data} color={COLORS.googleAds} canal="google_ads" analysis={analysis} showReach={false}
+          crm={crmRoasOf(data, "google")} />
       )}
       <Unavailable result={data.googleAds} name="Google Ads" />
 

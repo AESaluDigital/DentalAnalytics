@@ -214,7 +214,16 @@ export interface SellbotPipelineData {
   inGlobal: boolean;
   entries: SellbotEntry[];
   /** Mesmos números para os negócios criados no período anterior (comparação). */
-  prev: { created: number; won: number; wonValue: number; lost: number };
+  prev: {
+    created: number;
+    won: number;
+    wonValue: number;
+    lost: number;
+    /** Faturamento atribuído a cada plataforma pela origem do lead (ausente em relatórios antigos). */
+    wonValueByPlatform?: { meta: number; google: number };
+    /** Vendas sem plataforma pela origem, somadas por campanha — cruzadas com as campanhas do relatório. */
+    wonByCampaign?: { metaCampaignId: string | null; campaign: string | null; value: number }[];
+  };
   stages: SellbotStage[];
 }
 

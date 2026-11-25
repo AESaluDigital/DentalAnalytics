@@ -15,6 +15,7 @@ export const METRIC_HELP = {
   conversionRate: "Taxa de conversão: de cada 100 cliques, quantos viraram conversão (conversões ÷ cliques).",
   conversionValue: "Valor em dinheiro atribuído às conversões (ex.: valor do tratamento), quando configurado na plataforma.",
   roas: "Retorno sobre o investimento em anúncios: quanto voltou em valor de conversão para cada R$ 1 investido (valor ÷ investimento). Ex.: 3x = R$ 3 de retorno por R$ 1. Abaixo de 1x, o retorno não cobriu o investimento.",
+  roasCrm: "ROAS pelas vendas do CRM: faturamento dos leads que vieram desta plataforma e viraram venda ÷ investimento nela. A plataforma do lead vem da origem (campanha da Meta / Lead Ads ou utm_source facebook, instagram, google…) ou da campanha, quando bate com uma campanha deste relatório. Leads sem origem identificada não entram.",
   spendShare: "Fatia do investimento total que foi para este item.",
   matchType: "Correspondência da palavra-chave: Exata (só buscas com o mesmo sentido), Frase (buscas que contêm o sentido) ou Ampla (buscas relacionadas).",
   searchTerm: "O que a pessoa realmente digitou no Google antes de ver e clicar no anúncio.",
