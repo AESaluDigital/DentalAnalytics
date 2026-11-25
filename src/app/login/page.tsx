@@ -16,10 +16,8 @@ export default async function LoginPage() {
       <div className="auth-card stack">
         <Logo height={40} />
         <div>
-          <h1>Relatórios de performance</h1>
-          <p className="muted" style={{ margin: "6px 0 0" }}>
-            Meta Ads, Google Ads e GA4 dos clientes em um só lugar. Acesso restrito à equipe.
-          </p>
+          <h1>DentalAnalytics</h1>
+          <p className="muted" style={{ margin: "6px 0 0" }}>Relatórios de Performance</p>
         </div>
         <LoginForm />
         <p className="muted small auth-alt">
