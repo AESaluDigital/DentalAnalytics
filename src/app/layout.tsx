@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import SiteFooter from "@/components/SiteFooter";
 import "./globals.css";
 
 // Fontes da identidade SuperDental, servidas pelo próprio app (next/font baixa no build).
@@ -49,6 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <span className="orb orb-3" />
         </div>
         {children}
+        <SiteFooter />
       </body>
     </html>
   );

@@ -25,6 +25,10 @@ export default async function LoginPage() {
         <p className="muted small auth-alt">
           Ainda não tem acesso? <Link href="/signup">Criar conta</Link>
         </p>
+        <p className="muted small auth-alt">
+          Ao entrar, você declara estar ciente da nossa <Link href="/privacidade">Política de Privacidade</Link>, que explica
+          como tratamos seus dados conforme a LGPD.
+        </p>
       </div>
     </div>
   );

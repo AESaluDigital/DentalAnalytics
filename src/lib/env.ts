@@ -39,6 +39,9 @@ const schema = z.object({
   }),
   GOOGLE_ADS_API_VERSION: z.string().regex(/^v\d+$/).default("v26"),
 
+  /** E-mail do Encarregado (DPO) exibido na Política de Privacidade. */
+  PRIVACY_CONTACT_EMAIL: optional,
+
   DEMO_MODE: z.enum(["true", "false"]).default("false"),
 
   ANTHROPIC_API_KEY: optional,
