@@ -45,6 +45,14 @@ interface Deal {
   lead_campaign?: string | null;
   meta_campaign_id?: string | null;
   meta_campaign_name?: string | null;
+  meta_adset_name?: string | null;
+  meta_ad_name?: string | null;
+  meta_form_name?: string | null;
+  lead_id?: string | null;
+  lead_name?: string | null;
+  lead_phone?: string | null;
+  deal_owner_name?: string | null;
+  deal_tags?: string[] | null;
 }
 
 async function get<T>(token: string, path: string, params: Record<string, string | number> = {}): Promise<T> {
@@ -303,6 +311,8 @@ export interface SellbotLead {
   state: string | null;
   /** O detalhe (UTMs etc.) não pôde ser lido; só os dados da listagem. */
   partial: boolean;
+  /** Negócio do lead no CRM (filtro por período): funil, etapa e situação. */
+  deal: { pipeline: string; stage: string | null; status: "open" | "won" | "lost" } | null;
 }
 
 type Str = string | null | undefined;
@@ -390,6 +400,7 @@ function toLead(item: LeadListItem, d: LeadDetail | null): SellbotLead {
     city: clean(x.city),
     state: clean(x.state),
     partial: d === null,
+    deal: null,
   };
 }
 
@@ -410,9 +421,130 @@ export async function fetchSellbotLeads(
   const res = await get<{ leads?: LeadListItem[]; total?: number; pages?: number }>(conn.token, "/contacts/leads", params);
   const items = res.leads ?? [];
   const details = await Promise.all(items.map((i) => leadDetail(conn.token, i.id)));
+  const byDate = (l: SellbotLead) => l.dateAdded ?? l.dateUpdated ?? "";
   return {
-    leads: items.map((i, n) => toLead(i, details[n])),
+    leads: items.map((i, n) => toLead(i, details[n])).sort((a, b) => byDate(b).localeCompare(byDate(a))),
     total: num(res.total),
     pages: Math.max(num(res.pages), 1),
   };
+}
+
+/* ---------- Leads por período (pela entrada no CRM) ---------- */
+
+interface PeriodRow {
+  leadId: string;
+  deal: Deal;
+  pipeline: string;
+  stage: string | null;
+  status: "open" | "won" | "lost";
+}
+
+/** Lista do período já montada: trocar de página não refaz a consulta. */
+const periodCache = new Map<string, { at: number; rows: PeriodRow[] }>();
+const PERIOD_TTL = 5 * 60_000;
+
+/**
+ * Leads que entraram no CRM no período. A listagem de leads da Sellbot não filtra pela data de entrada,
+ * então a base são os negócios (GET /crm/deals), criados quando o lead entra no funil: abertos + ganhos/perdidos
+ * fechados desde o início do período, filtrados pela data de criação. Um lead com vários negócios aparece uma vez.
+ */
+async function periodRows(clientId: number, token: string, range: DateRange): Promise<PeriodRow[]> {
+  const key = `${clientId}|${range.start}|${range.end}`;
+  const hit = periodCache.get(key);
+  if (hit && Date.now() - hit.at < PERIOD_TTL) return hit.rows;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const pipelines = await sellbotPipelines(token);
+  const perPipeline = await Promise.all(
+    pipelines.map(async (p) => {
+      const closed = (status: string) => deals(token, { pipeline_id: p.id, status, date_from: range.start, date_to: today });
+      const [stages, won, lost, open] = await Promise.all([
+        stagesOf(token, p.id).catch(() => [] as { id: string; name: string }[]),
+        closed("won"),
+        closed("lost"),
+        deals(token, { pipeline_id: p.id, status: "open" }),
+      ]);
+      const stageName = new Map(stages.map((s) => [s.id, s.name]));
+      const tag = (list: Deal[], status: PeriodRow["status"]) =>
+        list.map((d) => ({ d, status, stage: d.deal_stage_id ? stageName.get(d.deal_stage_id) ?? null : null }));
+      return [...tag(won.list, "won"), ...tag(lost.list, "lost"), ...tag(open.list, "open")].map((x) => ({ ...x, pipeline: p.name }));
+    }),
+  );
+
+  const byLead = new Map<string, PeriodRow>();
+  for (const x of perPipeline.flat()) {
+    if (!inRange(day(x.d.deal_date_added), range)) continue;
+    const leadId = x.d.lead_id || `deal:${x.d.deal_id}`;
+    const cur = byLead.get(leadId);
+    // Mesmo lead em vários negócios: fica a entrada mais antiga do período.
+    if (cur && (cur.deal.deal_date_added ?? "") <= (x.d.deal_date_added ?? "")) continue;
+    byLead.set(leadId, { leadId, deal: x.d, pipeline: x.pipeline, stage: x.stage, status: x.status });
+  }
+  const rows = [...byLead.values()].sort((a, b) => (b.deal.deal_date_added ?? "").localeCompare(a.deal.deal_date_added ?? ""));
+  if (periodCache.size > 200) periodCache.clear();
+  periodCache.set(key, { at: Date.now(), rows });
+  return rows;
+}
+
+const digits = (v: string) => v.replace(/\D/g, "");
+const fold = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+export async function fetchSellbotLeadsByPeriod(
+  clientId: number,
+  opts: { page: number; limit: number; range: DateRange; search?: string },
+): Promise<{ leads: SellbotLead[]; total: number; pages: number } | null> {
+  const conn = await getSellbotConnection(clientId);
+  if (!conn) return null;
+  let rows = await periodRows(clientId, conn.token, opts.range);
+
+  const s = opts.search?.trim();
+  if (s) {
+    const n = digits(s);
+    const f = fold(s);
+    rows = rows.filter(({ deal: d }) =>
+      (d.lead_name && fold(d.lead_name).includes(f)) || (n.length >= 4 && d.lead_phone && digits(d.lead_phone).includes(n)),
+    );
+  }
+
+  const pages = Math.max(1, Math.ceil(rows.length / opts.limit));
+  const slice = rows.slice((opts.page - 1) * opts.limit, opts.page * opts.limit);
+  const details = await Promise.all(slice.map((r) => (r.leadId.startsWith("deal:") ? null : leadDetail(conn.token, r.leadId))));
+
+  const leads = slice.map((r, n): SellbotLead => {
+    const d = r.deal;
+    const base = toLead(
+      {
+        id: r.leadId,
+        first_name: d.lead_name,
+        phone: d.lead_phone,
+        lead_owner_name: d.deal_owner_name,
+        tags: d.deal_tags ?? [],
+        channel: d.deal_source_channel,
+        campaign: d.lead_campaign,
+      },
+      details[n],
+    );
+    // Atribuição do negócio (a mesma usada no dashboard) tem prioridade; o detalhe do lead completa o resto.
+    const pick = (a: string | null | undefined, b: string | null) => clean(a) ?? b;
+    return {
+      ...base,
+      name: details[n] ? base.name : clean(d.lead_name) ?? base.name,
+      dateAdded: d.deal_date_added ?? base.dateAdded,
+      utm: {
+        source: pick(d.utm_source, base.utm.source),
+        medium: pick(d.utm_medium, base.utm.medium),
+        campaign: pick(d.utm_campaign, base.utm.campaign),
+        content: pick(d.utm_content, base.utm.content),
+        term: pick(d.utm_term, base.utm.term),
+      },
+      meta: {
+        campaign: pick(d.meta_campaign_name, base.meta.campaign),
+        adset: pick(d.meta_adset_name, base.meta.adset),
+        ad: pick(d.meta_ad_name, base.meta.ad),
+        form: pick(d.meta_form_name, base.meta.form),
+      },
+      deal: { pipeline: r.pipeline, stage: r.stage, status: r.status },
+    };
+  });
+  return { leads, total: rows.length, pages };
 }

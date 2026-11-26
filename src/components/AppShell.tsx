@@ -11,7 +11,7 @@ import NavProgress from "./NavProgress";
 export interface NavItem {
   href: string;
   label: string;
-  icon: string;
+  icon: React.ReactNode;
   /** Grupo no menu lateral. */
   group: "Principal" | "Clientes" | "Configurações";
 }

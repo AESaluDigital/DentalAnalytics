@@ -20,6 +20,8 @@ export class PlatformError extends Error {
    ------------------------------------------------------------------ */
 
 const MAX_CONCURRENT = 4;
+/** Sellbot: a tela Leads lê o detalhe de cada lead da página (uma chamada por lead), e a API aguenta mais paralelismo. */
+const CONCURRENCY: Record<string, number> = { Sellbot: 10 };
 const MAX_RETRIES = 2;
 const META_COOLDOWN_MS = 5 * 60_000;
 
@@ -29,7 +31,7 @@ let metaBlockedUntil = 0;
 async function acquire(platform: string): Promise<() => void> {
   let q = queues.get(platform);
   if (!q) queues.set(platform, (q = { active: 0, waiting: [] }));
-  if (q.active >= MAX_CONCURRENT) await new Promise<void>((r) => q!.waiting.push(r));
+  if (q.active >= (CONCURRENCY[platform] ?? MAX_CONCURRENT)) await new Promise<void>((r) => q!.waiting.push(r));
   q.active++;
   return () => {
     q!.active--;

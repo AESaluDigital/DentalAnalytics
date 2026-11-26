@@ -970,3 +970,8 @@ input:focus-visible, select:focus-visible { box-shadow: 0 0 0 4px color-mix(in s
 .leads-table td { vertical-align: top; }
 .leads-table td.wrap { white-space: normal; min-width: 140px; max-width: 240px; overflow-wrap: anywhere; }
 .badge.good-badge { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.badge.status-open { color: var(--ink-2); }
+.badge.status-won { background: color-mix(in srgb, var(--series-3) 16%, transparent); color: var(--series-3); border-color: color-mix(in srgb, var(--series-3) 45%, transparent); }
+.badge.status-lost { background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
+.seg a.btn[aria-pressed="true"] { background: var(--btn-bg); color: var(--btn-ink); box-shadow: 0 3px 10px rgba(27, 181, 164, 0.3); }
+.nav-svg { width: 1em; height: 1em; vertical-align: -0.125em; }
