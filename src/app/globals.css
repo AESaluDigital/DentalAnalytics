@@ -755,8 +755,15 @@ tr.row-focus td { background: color-mix(in srgb, var(--brand-teal) 10%, transpar
 a .source-not_configured:hover { opacity: 1; border-color: var(--brand-teal); }
 .funnel-total { border-top: 1px dashed var(--border); padding-top: 10px; }
 .funnel-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
-.funnel-won .funnel-num { color: var(--series-3); }
-.funnel-lost .funnel-num { color: var(--bad); }
+.funnel-stack { display: flex; }
+.funnel-stack > span { border-radius: 0; }
+.funnel-stack > span:first-child { border-radius: 6px 0 0 6px; }
+.funnel-stack > span:last-child { border-radius: 0 6px 6px 0; }
+.funnel-stack > span:only-child { border-radius: 6px; }
+.funnel-split { display: inline-flex; justify-content: flex-end; gap: 6px; font-weight: 700; font-size: 13px; }
+.funnel-split .won { color: var(--series-3); }
+.funnel-split .lost { color: var(--bad); }
+.funnel-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding-top: 8px; border-top: 1px dashed var(--border); }
 
 /* ---------- Orçamento ---------- */
 .budget-form {

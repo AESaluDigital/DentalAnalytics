@@ -144,14 +144,15 @@ async function pipelineData(
   const cur = created(range);
   const old = created(prev);
 
-  const stageMap = new Map(stages.map((s) => [s.id, { ...s, count: 0, value: 0 }]));
+  // Por etapa: abertos que estão nela hoje e ganhos/perdidos na etapa em que estavam ao fechar.
+  const stageMap = new Map(stages.map((s) => [s.id, { ...s, count: 0, value: 0, won: 0, lost: 0 }]));
   for (const { d, status } of cur) {
-    if (status !== "open") continue;
     const st = d.deal_stage_id ? stageMap.get(d.deal_stage_id) : undefined;
-    if (st) {
+    if (!st) continue;
+    if (status === "open") {
       st.count++;
       st.value += num(d.deal_value);
-    }
+    } else st[status]++;
   }
 
   const entryOf = ({ d, status }: { d: Deal; status: "won" | "lost" | "open" }): SellbotEntry => ({

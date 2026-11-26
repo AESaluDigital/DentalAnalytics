@@ -205,6 +205,9 @@ export interface SellbotStage {
   /** Negócios criados no período que estão abertos nesta etapa. */
   count: number;
   value: number;
+  /** Negócios criados no período que foram ganhos / perdidos estando nesta etapa (ausente em relatórios antigos). */
+  won?: number;
+  lost?: number;
 }
 
 export interface SellbotPipelineData {

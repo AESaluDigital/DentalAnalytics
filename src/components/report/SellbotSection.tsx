@@ -107,7 +107,6 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
       won: wonList.length,
       wonValue: wonList.reduce((a, e) => a + e.value, 0),
       lost: lostList.length,
-      lostValue: lostList.reduce((a, e) => a + e.value, 0),
       open: openList.length,
       openValue: openList.reduce((a, e) => a + e.value, 0),
       prev: picked.reduce(
@@ -150,7 +149,8 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
 
   // Sem atribuição: nem UTM nem campanha (leads do Meta Lead Ads já trazem a campanha da Meta).
   const noUtm = v.entries.filter((e) => !e.utm.source && !e.utm.campaign && !e.campaign && !e.metaCampaignId).length;
-  const maxStage = Math.max(1, v.won, v.lost, ...(pipeline?.stages.map((s) => s.count) ?? [1]));
+  const stageTotal = (s: { count: number; won?: number; lost?: number }) => s.count + (s.won ?? 0) + (s.lost ?? 0);
+  const maxStage = Math.max(1, ...(pipeline?.stages.map(stageTotal) ?? [1]));
 
   return (
     <section className="card report-section sellbot">
@@ -208,31 +208,36 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
         </div>
         {pipeline ? (
           <div>
-            <h3 className="chart-title">Funil {pipeline.name} — leads do período por etapa, ganhos e perdidos</h3>
+            <h3 className="chart-title">Funil {pipeline.name} — leads do período por etapa (em aberto, ganhos e perdidos)</h3>
             {pipeline.stages.length === 0 ? <p className="muted">Etapas indisponíveis.</p> : (
               <div className="funnel">
-                {pipeline.stages.map((s) => (
-                  <div key={s.id} className="funnel-row">
-                    <span className="funnel-name">{s.name}</span>
-                    <span className="funnel-bar"><span style={{ width: `${(s.count / maxStage) * 100}%`, background: COLOR }} /></span>
-                    <span className="funnel-num">{int(s.count)}</span>
-                    <span className="funnel-val muted">{money(s.value, currency)}</span>
-                  </div>
-                ))}
-                <div className="funnel-row funnel-total funnel-won">
-                  <span className="funnel-name"><i className="funnel-dot" style={{ background: WON_COLOR }} aria-hidden /> Ganhos</span>
-                  <span className="funnel-bar"><span style={{ width: `${(v.won / maxStage) * 100}%`, background: WON_COLOR }} /></span>
-                  <span className="funnel-num">{int(v.won)}</span>
-                  <span className="funnel-val muted">{money(v.wonValue, currency)}</span>
-                </div>
-                <div className="funnel-row funnel-lost">
-                  <span className="funnel-name"><i className="funnel-dot" style={{ background: LOST_COLOR }} aria-hidden /> Perdidos</span>
-                  <span className="funnel-bar"><span style={{ width: `${(v.lost / maxStage) * 100}%`, background: LOST_COLOR }} /></span>
-                  <span className="funnel-num">{int(v.lost)}</span>
-                  <span className="funnel-val muted">{money(v.lostValue, currency)}</span>
-                </div>
-                <p className="muted small" style={{ margin: 0 }}>
-                  Dos {int(v.created)} leads do período: {int(v.open)} em aberto · {int(v.won)} ganhos · {int(v.lost)} perdidos
+                {pipeline.stages.map((s) => {
+                  const won = s.won ?? 0;
+                  const lost = s.lost ?? 0;
+                  const seg = (n: number) => `${(n / maxStage) * 100}%`;
+                  return (
+                    <div key={s.id} className="funnel-row"
+                      title={`${s.name}: ${int(s.count)} em aberto (${money(s.value, currency)}) · ${int(won)} ganhos · ${int(lost)} perdidos`}>
+                      <span className="funnel-name">{s.name}</span>
+                      <span className="funnel-bar funnel-stack">
+                        {s.count > 0 && <span style={{ width: seg(s.count), background: COLOR }} />}
+                        {won > 0 && <span style={{ width: seg(won), background: WON_COLOR }} />}
+                        {lost > 0 && <span style={{ width: seg(lost), background: LOST_COLOR }} />}
+                      </span>
+                      <span className="funnel-num">{int(stageTotal(s))}</span>
+                      <span className="funnel-val funnel-split">
+                        <span className="won" aria-label={`${int(won)} ganhos`}>{int(won)}</span>
+                        <span className="muted" aria-hidden>·</span>
+                        <span className="lost" aria-label={`${int(lost)} perdidos`}>{int(lost)}</span>
+                      </span>
+                    </div>
+                  );
+                })}
+                <p className="muted small funnel-legend" style={{ margin: 0 }}>
+                  <span><i className="funnel-dot" style={{ background: COLOR }} aria-hidden />em aberto {int(v.open)}</span>
+                  <span><i className="funnel-dot" style={{ background: WON_COLOR }} aria-hidden />ganhos {int(v.won)}</span>
+                  <span><i className="funnel-dot" style={{ background: LOST_COLOR }} aria-hidden />perdidos {int(v.lost)}</span>
+                  <span>· {int(v.created)} leads do período</span>
                 </p>
               </div>
             )}
