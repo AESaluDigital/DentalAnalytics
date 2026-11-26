@@ -122,7 +122,7 @@ h2 { font-size: 1.15rem; font-weight: 700; }
 h3 { font-size: 1rem; font-weight: 700; }
 ::selection { background: color-mix(in srgb, var(--brand-teal) 35%, transparent); }
 
-.container { max-width: 1280px; margin: 0 auto; padding: 28px 20px 72px; position: relative; z-index: 1; }
+.container { max-width: 1480px; margin: 0 auto; padding: 28px 20px 72px; position: relative; z-index: 1; }
 
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -162,7 +162,7 @@ h3 { font-size: 1rem; font-weight: 700; }
   opacity: 0.9;
 }
 .topbar .inner {
-  max-width: 1280px; margin: 0 auto; padding: 10px 20px;
+  max-width: 1480px; margin: 0 auto; padding: 10px 20px;
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px;
 }
 .brand { display: inline-flex; align-items: center; gap: 12px; color: var(--ink); }
@@ -591,7 +591,7 @@ code.uri { display: block; margin: 6px 0; padding: 8px 10px; overflow-x: auto; w
 .share-box { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .share-box input { flex: 1 1 320px; font-family: ui-monospace, monospace; font-size: 12px; }
 
-.public-shell { max-width: 1280px; margin: 0 auto; padding: 24px 20px 72px; position: relative; z-index: 1; }
+.public-shell { max-width: 1480px; margin: 0 auto; padding: 24px 20px 72px; position: relative; z-index: 1; }
 .public-footer {
   display: flex; justify-content: center; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; padding-top: 8px;
 }
@@ -1066,7 +1066,6 @@ a.notif:hover { text-decoration: none; background: color-mix(in srgb, var(--bran
 td.cell-bad .cell-delta:not(.good):not(.bad) { color: var(--muted); }
 
 /* Visão geral: página mais larga e tabela sem rolagem lateral */
-.container:has(.overview-page) { max-width: 1480px; }
 .overview-table table { table-layout: auto; }
 .overview-table td.name { min-width: 200px; max-width: 260px; }
 .add-comment-btn { align-self: flex-start; }
