@@ -754,6 +754,9 @@ tr.row-focus td { background: color-mix(in srgb, var(--brand-teal) 10%, transpar
 .source-not_configured { opacity: 0.75; }
 a .source-not_configured:hover { opacity: 1; border-color: var(--brand-teal); }
 .funnel-total { border-top: 1px dashed var(--border); padding-top: 10px; }
+.funnel-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.funnel-won .funnel-num { color: var(--series-3); }
+.funnel-lost .funnel-num { color: var(--bad); }
 
 /* ---------- Orçamento ---------- */
 .budget-form {

@@ -11,6 +11,9 @@ import { DailyLineChart } from "./Charts";
 import UtmTree from "./UtmTree";
 
 const COLOR = "#00A86B";
+/** Ganhos e perdidos no funil: cores próprias, diferentes das etapas em aberto. */
+const WON_COLOR = "var(--series-3)";
+const LOST_COLOR = "var(--bad)";
 
 /** Campanha de anúncio conhecida no relatório, para cruzar com a campanha do lead. */
 export interface AdCampaignRef {
@@ -104,6 +107,7 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
       won: wonList.length,
       wonValue: wonList.reduce((a, e) => a + e.value, 0),
       lost: lostList.length,
+      lostValue: lostList.reduce((a, e) => a + e.value, 0),
       open: openList.length,
       openValue: openList.reduce((a, e) => a + e.value, 0),
       prev: picked.reduce(
@@ -146,7 +150,7 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
 
   // Sem atribuição: nem UTM nem campanha (leads do Meta Lead Ads já trazem a campanha da Meta).
   const noUtm = v.entries.filter((e) => !e.utm.source && !e.utm.campaign && !e.campaign && !e.metaCampaignId).length;
-  const maxStage = Math.max(1, ...(pipeline?.stages.map((s) => s.count) ?? [1]));
+  const maxStage = Math.max(1, v.won, v.lost, ...(pipeline?.stages.map((s) => s.count) ?? [1]));
 
   return (
     <section className="card report-section sellbot">
@@ -204,7 +208,7 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
         </div>
         {pipeline ? (
           <div>
-            <h3 className="chart-title">Funil {pipeline.name} — leads do período em aberto, por etapa</h3>
+            <h3 className="chart-title">Funil {pipeline.name} — leads do período por etapa, ganhos e perdidos</h3>
             {pipeline.stages.length === 0 ? <p className="muted">Etapas indisponíveis.</p> : (
               <div className="funnel">
                 {pipeline.stages.map((s) => (
@@ -215,12 +219,21 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
                     <span className="funnel-val muted">{money(s.value, currency)}</span>
                   </div>
                 ))}
-                <div className="funnel-row funnel-total">
-                  <span className="funnel-name">Ganhos / perdidos</span>
-                  <span className="muted small">dos {int(v.created)} leads do período</span>
+                <div className="funnel-row funnel-total funnel-won">
+                  <span className="funnel-name"><i className="funnel-dot" style={{ background: WON_COLOR }} aria-hidden /> Ganhos</span>
+                  <span className="funnel-bar"><span style={{ width: `${(v.won / maxStage) * 100}%`, background: WON_COLOR }} /></span>
                   <span className="funnel-num">{int(v.won)}</span>
-                  <span className="funnel-val muted">{int(v.lost)} perdidos</span>
+                  <span className="funnel-val muted">{money(v.wonValue, currency)}</span>
                 </div>
+                <div className="funnel-row funnel-lost">
+                  <span className="funnel-name"><i className="funnel-dot" style={{ background: LOST_COLOR }} aria-hidden /> Perdidos</span>
+                  <span className="funnel-bar"><span style={{ width: `${(v.lost / maxStage) * 100}%`, background: LOST_COLOR }} /></span>
+                  <span className="funnel-num">{int(v.lost)}</span>
+                  <span className="funnel-val muted">{money(v.lostValue, currency)}</span>
+                </div>
+                <p className="muted small" style={{ margin: 0 }}>
+                  Dos {int(v.created)} leads do período: {int(v.open)} em aberto · {int(v.won)} ganhos · {int(v.lost)} perdidos
+                </p>
               </div>
             )}
           </div>
