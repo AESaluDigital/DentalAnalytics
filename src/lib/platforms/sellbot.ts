@@ -88,6 +88,7 @@ const CHANNEL: Record<string, string> = {
   "sellbot-manual": "Cadastro manual",
   "sellbot-open": "Conversa (WhatsApp)",
   "meta-lead-ads": "Meta Lead Ads",
+  "facebook-leads-form": "Formulário da Meta",
 };
 
 function sourceOf(d: Deal): string {
@@ -279,4 +280,139 @@ export async function sellbotStamp(clientId: number): Promise<string> {
     [clientId],
   );
   return r?.s ?? "-";
+}
+
+/* ---------- Leads (tela Leads) ---------- */
+
+export interface SellbotLead {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  owner: string | null;
+  tags: string[];
+  isCustomer: boolean;
+  dateAdded: string | null;
+  dateUpdated: string | null;
+  channel: string | null;
+  origin: string | null;
+  campaign: string | null;
+  utm: { source: string | null; medium: string | null; campaign: string | null; content: string | null; term: string | null };
+  meta: { campaign: string | null; adset: string | null; ad: string | null; form: string | null };
+  city: string | null;
+  state: string | null;
+  /** O detalhe (UTMs etc.) não pôde ser lido; só os dados da listagem. */
+  partial: boolean;
+}
+
+type Str = string | null | undefined;
+interface LeadListItem {
+  id: string;
+  first_name?: Str;
+  last_name?: Str;
+  phone?: Str;
+  email?: Str;
+  tags?: string[] | null;
+  is_customer?: boolean | null;
+  lead_owner_name?: Str;
+  date_updated?: Str;
+  channel?: Str;
+  campaign?: Str;
+}
+interface LeadDetail extends LeadListItem {
+  date_added?: Str;
+  acquisition_channel?: Str;
+  origin?: Str;
+  utm_source?: Str;
+  utm_medium?: Str;
+  utm_campaign?: Str;
+  utm_content?: Str;
+  utm_term?: Str;
+  meta_campaign?: Str;
+  meta_campaign_name?: Str;
+  meta_adset_name?: Str;
+  meta_ad_name?: Str;
+  meta_form_name?: Str;
+  city?: Str;
+  state?: Str;
+}
+
+const clean = (v: Str) => (typeof v === "string" && v.trim() ? v.trim() : null);
+
+/** Detalhes já lidos (o lead muda pouco): evita repetir a chamada ao trocar de página ou atualizar. */
+const detailCache = new Map<string, { at: number; lead: LeadDetail }>();
+const DETAIL_TTL = 10 * 60_000;
+
+async function leadDetail(token: string, id: string): Promise<LeadDetail | null> {
+  const key = `${token.slice(-8)}:${id}`;
+  const hit = detailCache.get(key);
+  if (hit && Date.now() - hit.at < DETAIL_TTL) return hit.lead;
+  try {
+    const res = await get<{ lead?: LeadDetail }>(token, `/contacts/leads/${encodeURIComponent(id)}`);
+    if (!res.lead) return null;
+    if (detailCache.size > 5000) detailCache.clear();
+    detailCache.set(key, { at: Date.now(), lead: res.lead });
+    return res.lead;
+  } catch {
+    return null;
+  }
+}
+
+function toLead(item: LeadListItem, d: LeadDetail | null): SellbotLead {
+  const x: LeadDetail = { ...item, ...(d ?? {}) };
+  const ch = clean(x.acquisition_channel) ?? clean(x.channel);
+  return {
+    id: item.id,
+    name: [clean(x.first_name), clean(x.last_name)].filter(Boolean).join(" ") || "(sem nome)",
+    phone: clean(x.phone),
+    email: clean(x.email),
+    owner: clean(x.lead_owner_name),
+    tags: x.tags ?? [],
+    isCustomer: Boolean(x.is_customer),
+    dateAdded: clean(x.date_added),
+    dateUpdated: clean(x.date_updated),
+    channel: ch ? CHANNEL[ch] ?? ch : null,
+    origin: clean(x.origin),
+    campaign: clean(x.campaign),
+    utm: {
+      source: clean(x.utm_source),
+      medium: clean(x.utm_medium),
+      campaign: clean(x.utm_campaign),
+      content: clean(x.utm_content),
+      term: clean(x.utm_term),
+    },
+    meta: {
+      campaign: clean(x.meta_campaign_name) ?? clean(x.meta_campaign),
+      adset: clean(x.meta_adset_name),
+      ad: clean(x.meta_ad_name),
+      form: clean(x.meta_form_name),
+    },
+    city: clean(x.city),
+    state: clean(x.state),
+    partial: d === null,
+  };
+}
+
+/**
+ * Uma página de leads do cliente na Sellbot (GET /contacts/leads), completada com o detalhe de cada lead
+ * (GET /contacts/leads/{id}), que é onde estão UTMs, origem Meta e data de entrada.
+ * Sem filtro de período: date_from/date_to da listagem não filtram pela data de entrada (verificado na API);
+ * a listagem já vem dos mais recentes para os mais antigos.
+ */
+export async function fetchSellbotLeads(
+  clientId: number,
+  opts: { page: number; limit: number; search?: string },
+): Promise<{ leads: SellbotLead[]; total: number; pages: number } | null> {
+  const conn = await getSellbotConnection(clientId);
+  if (!conn) return null;
+  const params: Record<string, string | number> = { page: opts.page, limit: opts.limit };
+  if (opts.search) params.s = opts.search;
+  const res = await get<{ leads?: LeadListItem[]; total?: number; pages?: number }>(conn.token, "/contacts/leads", params);
+  const items = res.leads ?? [];
+  const details = await Promise.all(items.map((i) => leadDetail(conn.token, i.id)));
+  return {
+    leads: items.map((i, n) => toLead(i, details[n])),
+    total: num(res.total),
+    pages: Math.max(num(res.pages), 1),
+  };
 }

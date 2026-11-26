@@ -12,6 +12,7 @@ import type {
   GadsSearchTermRow,
   GoogleAdsBreakdown,
   ConversionTypeRow,
+  AccountFunds,
 } from "../types";
 import { googleAccessToken } from "./google-oauth";
 import { PlatformError, fetchJson, num } from "./http";
@@ -315,29 +316,65 @@ interface BudgetRow {
   accountBudget?: {
     approvedSpendingLimitMicros?: string;
     adjustedSpendingLimitMicros?: string;
+    totalAdjustmentsMicros?: string;
     amountServedMicros?: string;
+    approvedStartDateTime?: string;
     approvedEndDateTime?: string;
     approvedSpendingLimitType?: string;
   };
 }
 
-/** Orçamento da conta (faturamento mensal/pedido de orçamento): limite aprovado − valor já veiculado. */
-export async function googleAccountBudget(customerId: string): Promise<{ remaining: number | null; limit: number | null; text: string | null }> {
+/** Soma dos orçamentos diários das campanhas ativas (orçamento compartilhado conta uma vez só). */
+async function googleDailyBudgetTotal(customerId: string): Promise<number | null> {
   const rows = (await search(
     customerId,
-    `SELECT account_budget.approved_spending_limit_micros, account_budget.adjusted_spending_limit_micros,
-            account_budget.amount_served_micros, account_budget.approved_end_date_time,
-            account_budget.approved_spending_limit_type
-     FROM account_budget WHERE account_budget.status = 'APPROVED'`,
-  )) as BudgetRow[];
+    `SELECT campaign_budget.id, campaign_budget.amount_micros, campaign_budget.period FROM campaign
+     WHERE campaign.status = 'ENABLED' AND campaign.serving_status != 'ENDED'`,
+  )) as { campaignBudget?: { id?: string; amountMicros?: string; period?: string } }[];
+  const byId = new Map<string, number>();
+  for (const r of rows) {
+    const b = r.campaignBudget;
+    if (!b?.id || (b.period && b.period !== "DAILY")) continue;
+    byId.set(b.id, num(b.amountMicros) / 1_000_000);
+  }
+  return byId.size ? [...byId.values()].reduce((a, v) => a + v, 0) : null;
+}
+
+/**
+ * Orçamento da conta (o mesmo da tela "Faturamento → Orçamentos da conta" do MCC). Em contas pré-pagas,
+ * cada boleto/Pix pago entra como ajuste do orçamento; o restante é limite ajustado − valor já veiculado.
+ */
+export async function googleAccountBudget(customerId: string): Promise<AccountFunds> {
+  const [rows, dailyBudget] = await Promise.all([
+    search(
+      customerId,
+      `SELECT account_budget.approved_spending_limit_micros, account_budget.adjusted_spending_limit_micros,
+              account_budget.total_adjustments_micros, account_budget.amount_served_micros,
+              account_budget.approved_start_date_time, account_budget.approved_end_date_time,
+              account_budget.approved_spending_limit_type
+       FROM account_budget WHERE account_budget.status = 'APPROVED'`,
+    ) as Promise<BudgetRow[]>,
+    googleDailyBudgetTotal(customerId).catch(() => null),
+  ]);
   const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+  // Orçamento vigente: já começou e não terminou (o mais recente, se houver mais de um).
   const active = rows
     .map((r) => r.accountBudget ?? {})
-    .filter((b) => !b.approvedEndDateTime || b.approvedEndDateTime >= now);
+    .filter((b) => (!b.approvedStartDateTime || b.approvedStartDateTime <= now) && (!b.approvedEndDateTime || b.approvedEndDateTime >= now))
+    .sort((a, b) => (b.approvedStartDateTime ?? "").localeCompare(a.approvedStartDateTime ?? ""));
   const b = active[0];
-  if (!b) return { remaining: null, limit: null, text: null };
-  if (b.approvedSpendingLimitType === "INFINITE") return { remaining: null, limit: null, text: "Orçamento da conta sem limite" };
-  const limit = num(b.adjustedSpendingLimitMicros ?? b.approvedSpendingLimitMicros) / 1_000_000;
-  const served = num(b.amountServedMicros) / 1_000_000;
-  return { limit: limit || null, remaining: limit ? Math.max(limit - served, 0) : null, text: null };
+  const none = { remaining: null, limit: null, spent: null, dailyBudget };
+  if (!b) return { ...none, text: null };
+  if (b.approvedSpendingLimitType === "INFINITE") return { ...none, text: "Orçamento da conta sem limite" };
+  const limit = b.adjustedSpendingLimitMicros !== undefined
+    ? num(b.adjustedSpendingLimitMicros) / 1_000_000
+    : (num(b.approvedSpendingLimitMicros) + num(b.totalAdjustmentsMicros)) / 1_000_000;
+  const spent = num(b.amountServedMicros) / 1_000_000;
+  return {
+    limit: limit || null,
+    spent,
+    remaining: limit ? Math.max(limit - spent, 0) : null,
+    dailyBudget,
+    text: null,
+  };
 }

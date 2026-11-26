@@ -10,6 +10,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const all: (NavItem & { show: boolean })[] = [
     { href: "/dashboard", label: "Dashboard", icon: "◧", group: "Principal", show: can(user, "view_reports") },
     { href: "/reports", label: "Relatórios", icon: "▤", group: "Principal", show: can(user, "view_reports") },
+    { href: "/leads", label: "Leads", icon: "☏", group: "Principal", show: can(user, "view_leads") },
     { href: "/", label: "Clientes", icon: "◉", group: "Clientes", show: can(user, "view_clients") },
     { href: "/clients/new", label: "Novo cliente", icon: "+", group: "Clientes", show: can(user, "manage_clients") },
     { href: "/settings/meta-ads", label: "Contas Meta Ads", icon: "ⓜ", group: "Configurações", show: can(user, "manage_integrations") },
@@ -19,7 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/settings/users", label: "Usuários e permissões", icon: "☺", group: "Configurações", show: user.master },
   ];
   const items = all.filter((i) => i.show).map(({ show: _show, ...i }) => i);
-  const primary = items.filter((i) => i.href === "/dashboard" || i.href === "/reports");
+  const primary = items.filter((i) => i.href === "/dashboard" || i.href === "/reports" || i.href === "/leads");
 
   return (
     <AppShell

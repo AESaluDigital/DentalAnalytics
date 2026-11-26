@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { saveBudgetAction } from "@/lib/actions/budget";
 import type { BudgetData, BudgetPlatform } from "@/lib/budget";
-import { eachDay } from "@/lib/dates";
+import { addDays, eachDay, formatDateBr } from "@/lib/dates";
 import { money, pct } from "@/lib/format";
 import { METRIC_HELP, type MetricKey } from "@/lib/metric-help";
 import InfoTip from "./InfoTip";
@@ -11,7 +11,7 @@ import { BudgetChart } from "./report/Charts";
 
 const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
-function Stat({ label, help, value, note, tone }: { label: string; help: MetricKey; value: string; note?: string; tone?: "good" | "bad" }) {
+function Stat({ label, help, value, note, tone }: { label: string; help: MetricKey; value: string; note?: string; tone?: "good" | "bad" | "warn" }) {
   return (
     <div className={`kpi${tone ? ` kpi-tone-${tone}` : ""}`}>
       <span className="kpi-label">{label}<InfoTip label={label} text={METRIC_HELP[help]} /></span>
@@ -24,6 +24,81 @@ function Stat({ label, help, value, note, tone }: { label: string; help: MetricK
 /** Formata para o campo do formulário (ex.: 5000 → "5.000,00"). */
 const toInput = (v: number | null) =>
   v === null ? "" : v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Gasto médio diário dos últimos 7 dias completos (hoje ainda está em andamento). */
+function avg7(p: BudgetPlatform): number {
+  const done = p.daily.slice(0, -1).slice(-7);
+  return done.length ? done.reduce((a, d) => a + d.spend, 0) / done.length : (p.daily.at(-1)?.spend ?? 0);
+}
+
+/** Dias de saldo: saldo disponível na conta ÷ gasto médio diário real (usa o orçamento diário se não houve gasto). */
+function fundsDays(p: BudgetPlatform): { days: number; by: "real" | "budget" } | null {
+  const rest = p.account?.remaining;
+  if (rest === null || rest === undefined) return null;
+  const real = avg7(p);
+  if (real > 0) return { days: rest / real, by: "real" };
+  const budget = p.account?.dailyBudget;
+  return budget ? { days: rest / budget, by: "budget" } : null;
+}
+
+const daysText = (d: number) => (d < 1 ? "menos de 1 dia" : `${Math.floor(d)} dia${Math.floor(d) === 1 ? "" : "s"}`);
+const daysTone = (d: number): "bad" | "warn" | "good" => (d <= 3 ? "bad" : d <= 7 ? "warn" : "good");
+const daysCell = (p: BudgetPlatform) => {
+  const f = fundsDays(p);
+  return f ? daysText(f.days) : "—";
+};
+
+/** Saldo que a própria conta de anúncios informa (no Google: "Orçamento restante da conta") e quantos dias ele dura. */
+function AccountFundsBlock({ platforms, showLabels, today }: { platforms: BudgetPlatform[]; showLabels: boolean; today: string }) {
+  const list = platforms.filter((p) => p.account && (p.account.remaining !== null || p.account.text));
+  if (list.length === 0) return null;
+  return (
+    <div className="funds">
+      <h3 className="chart-title">Saldo na conta de anúncios</h3>
+      {list.map((p) => {
+        const a = p.account!;
+        if (a.remaining === null) {
+          return (
+            <p key={p.key} className="muted small funds-note">
+              <strong>{p.label}:</strong> {a.text ?? "a conta não informa saldo"}
+            </p>
+          );
+        }
+        const f = fundsDays(p);
+        const real = avg7(p);
+        const usedPct = a.limit && a.spent !== null ? a.spent / a.limit : null;
+        const end = f && f.days >= 1 ? formatDateBr(addDays(today, Math.floor(f.days))).slice(0, 5) : null;
+        const byBudget = a.dailyBudget ? a.remaining / a.dailyBudget : null;
+        const tone = f ? daysTone(f.days) : undefined;
+        return (
+          <div key={p.key} className="funds-row">
+            {showLabels && <strong className="funds-label">{p.label}</strong>}
+            <div className="kpi-grid">
+              <Stat label="Saldo disponível" help="accountRemaining" value={money(a.remaining, p.currency)}
+                tone={tone === "good" ? undefined : tone}
+                note={a.limit ? `de ${money(a.limit, p.currency)}${usedPct !== null ? ` · ${pct(usedPct)} gasto` : ""}` : undefined} />
+              <Stat label="Gasto médio diário" help="dailyPace" value={money(real, p.currency)} note="últimos 7 dias" />
+              {a.dailyBudget !== null && (
+                <Stat label="Orçamento diário total" help="dailyBudgetTotal" value={money(a.dailyBudget, p.currency)} note="campanhas ativas" />
+              )}
+              <Stat label="Dias de saldo" help="daysOfFunds" value={f ? daysText(f.days) : "—"} tone={tone}
+                note={[
+                  end ? `acaba por volta de ${end}` : f ? "recarregue hoje" : "sem gasto recente",
+                  f?.by === "real" && byBudget !== null ? `pelo orçamento diário: ${daysText(byBudget)}` : null,
+                  f?.by === "budget" ? "calculado pelo orçamento diário" : null,
+                ].filter(Boolean).join(" · ")} />
+            </div>
+            {usedPct !== null && (
+              <div className="budget-bar" role="img" aria-label={`${pct(usedPct)} do orçamento da conta já gasto`}>
+                <span className={tone === "bad" ? "over" : undefined} style={{ width: `${Math.min(usedPct, 1) * 100}%` }} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function BudgetSection({
   data,
@@ -64,10 +139,6 @@ export default function BudgetSection({
     const setBudgets = picked.map((p) => p.budget).filter((b): b is number => b !== null);
     const budget = platform ? platform.budget : data.totalBudget ?? (setBudgets.length ? setBudgets.reduce((a, b) => a + b, 0) : null);
 
-    const accounts = picked.filter((p) => p.account && (p.account.remaining !== null || p.account.text));
-    const accountRemaining = accounts.some((p) => p.account?.remaining !== null)
-      ? accounts.reduce((a, p) => a + (p.account?.remaining ?? 0), 0)
-      : null;
 
     // Gráfico: acumulado real até hoje e projeção de hoje até o fim do mês.
     let acc = 0;
@@ -79,7 +150,7 @@ export default function BudgetSection({
       return { date, real: n <= day ? acc : null, proj: projVal };
     });
 
-    return { spent, avg, projected, budget, accounts, accountRemaining, chart };
+    return { spent, avg, projected, budget, chart };
   }, [picked, platform, data, day, daysLeft]);
 
   const remaining = v.budget === null ? null : v.budget - v.spent;
@@ -156,12 +227,9 @@ export default function BudgetSection({
         <Stat label="Projeção até o fim do mês" help="projection" value={money(v.projected, currency)}
           tone={diff === null ? undefined : diff > 0 ? "bad" : "good"}
           note={diff === null ? undefined : diff > 0 ? `${money(diff, currency)} acima do orçamento` : `${money(-diff, currency)} abaixo do orçamento`} />
-        {v.accounts.length > 0 && (
-          <Stat label="Saldo/limite na conta" help="accountFunds"
-            value={v.accountRemaining === null ? "—" : money(v.accountRemaining, currency)}
-            note={v.accounts.map((p) => `${p.label}: ${p.account?.remaining !== null && p.account?.remaining !== undefined ? `${money(p.account.remaining, currency)} restantes${p.account.limit ? ` de ${money(p.account.limit, currency)}` : ""}` : p.account?.text ?? "—"}`).join(" · ")} />
-        )}
       </div>
+
+      <AccountFundsBlock platforms={picked} showLabels={data.platforms.length > 1} today={data.today} />
 
       {v.budget !== null && used !== null && (
         <div className="budget-bar" role="img" aria-label={`${pct(used)} do orçamento usado`}>
@@ -186,7 +254,8 @@ export default function BudgetSection({
                 <th className="num">Investido</th>
                 <th className="num">Restante</th>
                 <th className="num">Projeção</th>
-                <th className="num">Saldo/limite na conta</th>
+                <th className="num">Saldo na conta</th>
+                <th className="num">Dias de saldo</th>
               </tr>
             </thead>
             <tbody>
@@ -207,6 +276,7 @@ export default function BudgetSection({
                     <td className="num">
                       {p.account?.remaining !== null && p.account?.remaining !== undefined ? money(p.account.remaining, p.currency) : p.account?.text ?? "—"}
                     </td>
+                    <td className="num">{daysCell(p)}</td>
                   </tr>
                 );
               })}

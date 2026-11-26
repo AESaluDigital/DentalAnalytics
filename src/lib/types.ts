@@ -271,3 +271,16 @@ export interface ClientRow {
   ga4_property_id: string | null;
   active: boolean;
 }
+
+/** Saldo da conta de anúncios, como a plataforma informa. */
+export interface AccountFunds {
+  /** Quanto ainda pode ser gasto (null = a plataforma não informa ou não há limite). */
+  remaining: number | null;
+  /** Limite total (no Google: orçamento da conta aprovado + ajustes/recargas). */
+  limit: number | null;
+  /** Quanto do limite já foi gasto. */
+  spent: number | null;
+  /** Soma dos orçamentos diários das campanhas ativas ("Orçamento diário total" do Google). */
+  dailyBudget: number | null;
+  text: string | null;
+}

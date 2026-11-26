@@ -4,6 +4,7 @@ import { env } from "../env";
 import { metaAccessToken } from "../integrations";
 import { eachDay } from "../dates";
 import type {
+  AccountFunds,
   AdsCampaignRow,
   AdsDailyRow,
   AdsPlatformData,
@@ -522,7 +523,7 @@ export async function metaDailySpend(accountId: string, range: DateRange): Promi
  * Limite de gastos e forma de pagamento da conta (Graph API: GET /act_{id}).
  * spend_cap e amount_spent vêm em centavos; spend_cap "0" = sem limite.
  */
-export async function metaAccountFunds(accountId: string): Promise<{ remaining: number | null; limit: number | null; text: string | null }> {
+export async function metaAccountFunds(accountId: string): Promise<AccountFunds> {
   const { token, secret, version } = await metaCredentials();
   const q = new URLSearchParams({ fields: "spend_cap,amount_spent,funding_source_details" });
   const proof = appSecretProof(token, secret);
@@ -537,6 +538,8 @@ export async function metaAccountFunds(accountId: string): Promise<{ remaining: 
   return {
     limit: cap > 0 ? cap : null,
     remaining: cap > 0 ? Math.max(cap - spent, 0) : null,
+    spent: cap > 0 ? spent : null,
+    dailyBudget: null,
     text: r.funding_source_details?.display_string ?? null,
   };
 }

@@ -3,6 +3,7 @@
 export const PERMISSIONS = [
   { key: "view_clients", label: "Ver clientes", desc: "Lista de clientes e contas vinculadas." },
   { key: "view_reports", label: "Ver dashboard e relatórios", desc: "Dashboard ao vivo e relatórios salvos." },
+  { key: "view_leads", label: "Ver leads", desc: "Lista de leads com nome, telefone, e-mail e UTMs (dados pessoais — LGPD)." },
   { key: "export_reports", label: "Gerar e exportar relatórios", desc: "Gerar relatório, exportar PDF e links de compartilhamento." },
   { key: "manage_clients", label: "Cadastrar e editar clientes", desc: "Criar clientes e vincular contas de anúncio." },
   { key: "manage_integrations", label: "Integrações e contas de anúncio", desc: "Conectar Meta/Google e vincular contas dos portfólios/MCC." },

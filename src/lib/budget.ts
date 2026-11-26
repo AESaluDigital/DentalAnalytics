@@ -7,7 +7,7 @@ import { PlatformError } from "./platforms/http";
 import { demoGoogleAds, demoMeta } from "./platforms/demo";
 import { env } from "./env";
 import { previousRange } from "./dates";
-import type { ClientRow } from "./types";
+import type { AccountFunds, ClientRow } from "./types";
 
 /**
  * Orçamento do mês atual de um cliente: gasto até hoje por plataforma, orçamento definido,
@@ -25,7 +25,7 @@ export interface BudgetPlatform {
   /** Orçamento definido para o mês (null = não definido). */
   budget: number | null;
   /** Saldo/limite informado pela conta de anúncios (quando a plataforma informa). */
-  account: { remaining: number | null; limit: number | null; text: string | null } | null;
+  account: AccountFunds | null;
   error: string | null;
 }
 
@@ -114,7 +114,10 @@ export async function getBudgetData(client: ClientRow): Promise<BudgetData> {
     const prev = previousRange(range);
     const demo = (key: BudgetKey, label: string, daily: { date: string; spend: number }[]): BudgetPlatform => ({
       key, label, currency: "BRL", daily: daily.map((d) => ({ date: d.date, spend: d.spend })), budget: budgets.get(key) ?? null,
-      account: key === "meta" ? { remaining: 2350, limit: 10000, text: null } : { remaining: null, limit: null, text: "Faturamento automático (cartão)" }, error: null,
+      account: key === "meta"
+        ? { remaining: 2350, limit: 10000, spent: 7650, dailyBudget: null, text: null }
+        : { remaining: 286.65, limit: 50407.78, spent: 50121.13, dailyBudget: 40, text: null },
+      error: null,
     });
     return {
       month, today, daysInMonth: daysIn(month), totalBudget: budgets.get("total") ?? null,

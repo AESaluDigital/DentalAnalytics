@@ -719,6 +719,7 @@ td.actions { text-align: right; }
 /* ---------- Vendas (Sellbot) ---------- */
 .kpi-tone-good .kpi-value { color: var(--good); }
 .kpi-tone-bad .kpi-value { color: var(--bad); }
+.kpi-tone-warn .kpi-value { color: var(--brand-orange); }
 .funnel { display: flex; flex-direction: column; gap: 10px; }
 .funnel-row { display: grid; grid-template-columns: minmax(120px, 34%) 1fr 48px 110px; gap: 10px; align-items: center; font-size: 13px; }
 .funnel-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -952,3 +953,17 @@ input:focus-visible, select:focus-visible { box-shadow: 0 0 0 4px color-mix(in s
   .skel::after { animation: none; }
   .nav-progress.on { animation: none; transform: scaleX(0.6); }
 }
+
+/* ---------- Saldo na conta de anúncios (dentro do orçamento) ---------- */
+.funds { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--series-3) 6%, var(--surface-2)); border: 1px solid var(--border); }
+.funds .chart-title { margin: 0; }
+.funds-row { display: flex; flex-direction: column; gap: 10px; }
+.funds-row + .funds-row { padding-top: 12px; border-top: 1px solid var(--border); }
+.funds-label { font-family: var(--font-disp); font-size: 13px; }
+.funds-note { margin: 0; }
+
+/* ---------- Leads ---------- */
+.leads-table td { vertical-align: top; }
+.leads-table td.wrap { white-space: normal; min-width: 140px; max-width: 240px; overflow-wrap: anywhere; }
+.badge.good-badge { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
