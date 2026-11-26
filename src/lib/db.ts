@@ -69,15 +69,16 @@ export function ensureSchema(): Promise<void> {
     try {
       const rows = await query<{ kind: string; name: string }>(
         `SELECT 'col' AS kind, column_name AS name FROM information_schema.columns
-           WHERE table_schema = current_schema() AND table_name = 'users' AND column_name IN ('permissions', 'pending')
+           WHERE table_schema = current_schema() AND ((table_name = 'users' AND column_name IN ('permissions', 'pending'))
+             OR (table_name = 'clients' AND column_name = 'report_template_id') OR (table_name = 'reports' AND column_name = 'template'))
          UNION ALL
          SELECT 'table', table_name FROM information_schema.tables
-           WHERE table_schema = current_schema() AND table_name IN ('sellbot_connections', 'client_budgets', 'attention_comments', 'attention_replies', 'notifications')`,
+           WHERE table_schema = current_schema() AND table_name IN ('sellbot_connections', 'client_budgets', 'attention_comments', 'attention_replies', 'notifications', 'report_templates')`,
       );
       const have = new Set(rows.map((r) => `${r.kind}:${r.name}`));
       missing = {
-        cols: ["permissions", "pending"].filter((c) => !have.has(`col:${c}`)),
-        tables: ["sellbot_connections", "client_budgets", "attention_comments", "attention_replies", "notifications"].filter((t) => !have.has(`table:${t}`)),
+        cols: ["permissions", "pending", "report_template_id", "template"].filter((c) => !have.has(`col:${c}`)),
+        tables: ["sellbot_connections", "client_budgets", "attention_comments", "attention_replies", "notifications", "report_templates"].filter((t) => !have.has(`table:${t}`)),
       };
     } catch (err) {
       console.error("[db] não foi possível verificar o schema", err);
@@ -116,6 +117,18 @@ export function ensureSchema(): Promise<void> {
       if (missing.tables.some((t) => ATTENTION_TABLES.includes(t))) {
         for (const sql of ATTENTION_SQL) await client.query(sql);
       }
+      // Modelos de relatório: mesmo SQL do db/schema.sql.
+      if (missing.tables.includes("report_templates")) await client.query(`CREATE TABLE IF NOT EXISTS report_templates (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 120),
+        layout JSONB NOT NULL,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+      if (missing.cols.includes("report_template_id")) {
+        await client.query("ALTER TABLE clients ADD COLUMN IF NOT EXISTS report_template_id INTEGER REFERENCES report_templates(id) ON DELETE SET NULL");
+      }
+      if (missing.cols.includes("template")) await client.query("ALTER TABLE reports ADD COLUMN IF NOT EXISTS template JSONB");
     } catch (err) {
       console.error("[db] não foi possível garantir o schema", err);
       schemaReady = undefined; // tenta de novo no próximo acesso

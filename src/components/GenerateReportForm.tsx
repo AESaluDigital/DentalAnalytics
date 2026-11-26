@@ -19,7 +19,13 @@ function presets(today: string) {
   ];
 }
 
-export default function GenerateReportForm({ clientId, today }: { clientId: number; today: string }) {
+export default function GenerateReportForm({ clientId, today, templates, clientTemplate }: {
+  clientId: number;
+  today: string;
+  templates: { id: number; name: string }[];
+  /** Modelo padrão do cliente (null = relatório completo). */
+  clientTemplate: string | null;
+}) {
   const [state, action, pending] = useActionState<GenerateState, FormData>(generateReportAction, {});
   const options = presets(today);
   const [range, setRange] = useState({ start: options[2].start, end: options[2].end });
@@ -56,6 +62,18 @@ export default function GenerateReportForm({ clientId, today }: { clientId: numb
             onChange={(e) => setRange((r) => ({ ...r, end: e.target.value }))} />
         </label>
       </div>
+      <label>
+        Modelo
+        <select name="template" defaultValue="client">
+          <option value="client">Padrão do cliente ({clientTemplate ?? "relatório completo"})</option>
+          <option value="none">Relatório completo (sem modelo)</option>
+          {templates.length > 0 && (
+            <optgroup label="Outro modelo">
+              {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </optgroup>
+          )}
+        </select>
+      </label>
       <p className="muted small">A comparação é feita com o período anterior de mesma duração.</p>
       {state.error && <p className="error" role="alert">{state.error}</p>}
       <div className="row">

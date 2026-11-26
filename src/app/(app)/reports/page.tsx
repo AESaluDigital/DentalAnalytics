@@ -3,6 +3,7 @@ import { can, requirePermission } from "@/lib/auth";
 import { ensureSchema, query } from "@/lib/db";
 import { formatDateBr, isIsoDate, todayIso } from "@/lib/dates";
 import BulkReports from "@/components/BulkReports";
+import { listTemplates } from "@/lib/templates";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Relatórios" };
@@ -20,14 +21,14 @@ interface Row {
   has_analysis: boolean;
 }
 
-export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ client?: string; start?: string; end?: string }> }) {
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ client?: string; start?: string; end?: string; template?: string }> }) {
   const user = await requirePermission("view_reports");
   const sp = await searchParams;
   const clientId = Number(sp.client);
   const filter = Number.isInteger(clientId) && clientId > 0 ? clientId : null;
 
   await ensureSchema();
-  const [clients, reports] = await Promise.all([
+  const [clients, reports, templates] = await Promise.all([
     query<{ id: number; name: string; active: boolean; has_accounts: boolean }>(
       `SELECT id, name, active,
               (meta_ad_account_id IS NOT NULL OR google_ads_customer_id IS NOT NULL OR ga4_property_id IS NOT NULL
@@ -42,7 +43,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
        ORDER BY r.created_at DESC LIMIT 200`,
       [filter],
     ),
+    can(user, "export_reports") ? listTemplates() : Promise.resolve([]),
   ]);
+  const tplParam = Number(sp.template);
 
   return (
     <div className="stack">
@@ -51,6 +54,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <span className="eyebrow">Histórico</span>
           <h1>Relatórios</h1>
         </div>
+        {can(user, "export_reports") && <Link className="btn" href="/reports/templates">Modelos de relatório</Link>}
       </div>
 
       {can(user, "export_reports") && (
@@ -61,7 +65,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             clientId: filter,
             start: sp.start && isIsoDate(sp.start) ? sp.start : null,
             end: sp.end && isIsoDate(sp.end) ? sp.end : null,
+            template: Number.isInteger(tplParam) && tplParam > 0 ? tplParam : null,
           }}
+          templates={templates.map((t) => ({ id: t.id, name: t.name }))}
         />
       )}
 

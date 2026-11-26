@@ -4,6 +4,7 @@ import { EMPTY_ADS, adsKpis, delta, ratio, sumAds } from "@/lib/metrics";
 import { roasText, roasTone, roasValue } from "@/lib/metric-cols";
 import { crmRevenueByPlatform, type AdPlatform } from "@/lib/attribution";
 import { METRIC_HELP, type MetricKey } from "@/lib/metric-help";
+import { metricValue, type ReportLayout, type SectionKey } from "@/lib/report-template";
 import type { AdsPlatformData, ConversionTypeRow, Ga4Data, PlatformResult, ReportAnalysis, ReportData } from "@/lib/types";
 import { CategoryBarChart, DailyBarChart, DailyLineChart } from "./Charts";
 import GoogleAdsDrilldown from "./GoogleAdsDrilldown";
@@ -515,9 +516,34 @@ function Sales({ data }: { data: ReportData }) {
   );
 }
 
+/** Cards do modelo de relatório: cada um com as métricas escolhidas (as sem dados no período ficam de fora). */
+function TemplateCards({ data, cards }: { data: ReportData; cards: ReportLayout["cards"] }) {
+  return (
+    <>
+      {cards.map((c, i) => {
+        const items = c.metrics.map((m) => metricValue(data, m)).filter((x): x is Kpi => x !== null);
+        if (!items.length) return null;
+        return (
+          <section key={i} className="card report-section template-card">
+            <h2>{c.title}</h2>
+            <KpiGrid items={items} />
+          </section>
+        );
+      })}
+    </>
+  );
+}
+
 /* ---------- relatório ---------- */
 
-export default function ReportView({ data, analysis }: { data: ReportData; analysis: ReportAnalysis | null }) {
+export default function ReportView({ data, analysis, template }: {
+  data: ReportData;
+  analysis: ReportAnalysis | null;
+  /** Modelo usado na geração (null/ausente = relatório completo). */
+  template?: ReportLayout | null;
+}) {
+  const show = (k: SectionKey) => !template || template.sections[k] !== false;
+  if (!show("analysis")) analysis = null;
   return (
     <article className="report stack">
       <header className="report-hero">
@@ -545,24 +571,25 @@ export default function ReportView({ data, analysis }: { data: ReportData; analy
       )}
 
       <AnalysisBlock analysis={analysis} />
-      <Overview data={data} />
-      <Sales data={data} />
-      {data.sellbot && <Unavailable result={data.sellbot} name="Vendas — Sellbot" />}
+      {template && <TemplateCards data={data} cards={template.cards} />}
+      {show("overview") && <Overview data={data} />}
+      {show("sales") && <Sales data={data} />}
+      {show("sales") && data.sellbot && <Unavailable result={data.sellbot} name="Vendas — Sellbot" />}
 
-      {data.meta.status === "ok" && (
+      {show("meta") && data.meta.status === "ok" && (
         <AdsSection title="Meta Ads" p={data.meta.data} color={COLORS.meta} canal="meta" analysis={analysis} showReach
           crm={crmRoasOf(data, "meta")} />
       )}
-      <Unavailable result={data.meta} name="Meta Ads" />
+      {show("meta") && <Unavailable result={data.meta} name="Meta Ads" />}
 
-      {data.googleAds.status === "ok" && (
+      {show("google") && data.googleAds.status === "ok" && (
         <AdsSection title="Google Ads" p={data.googleAds.data} color={COLORS.googleAds} canal="google_ads" analysis={analysis} showReach={false}
           crm={crmRoasOf(data, "google")} />
       )}
-      <Unavailable result={data.googleAds} name="Google Ads" />
+      {show("google") && <Unavailable result={data.googleAds} name="Google Ads" />}
 
-      {data.ga4.status === "ok" && <Ga4Section g={data.ga4.data} analysis={analysis} />}
-      <Unavailable result={data.ga4} name="Google Analytics 4" />
+      {show("ga4") && data.ga4.status === "ok" && <Ga4Section g={data.ga4.data} analysis={analysis} />}
+      {show("ga4") && <Unavailable result={data.ga4} name="Google Analytics 4" />}
 
       {analysis && (
         <p className="muted small">Textos de análise gerados com apoio de IA a partir dos números deste relatório.</p>

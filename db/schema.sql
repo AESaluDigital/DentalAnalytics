@@ -120,3 +120,17 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications (user_id, read_at, created_at DESC);
+
+-- Modelos de relatório: cards personalizados (métricas escolhidas) + seções exibidas. layout = JSON (ver src/lib/report-template.ts).
+CREATE TABLE IF NOT EXISTS report_templates (
+  id          SERIAL PRIMARY KEY,
+  name        TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 120),
+  layout      JSONB NOT NULL,
+  created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Modelo padrão de cada cliente (NULL = relatório completo).
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS report_template_id INTEGER REFERENCES report_templates(id) ON DELETE SET NULL;
+-- Cópia do modelo usado na geração (o relatório não muda se o modelo for editado depois).
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS template JSONB;

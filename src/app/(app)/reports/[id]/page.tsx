@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { can, requirePermission } from "@/lib/auth";
-import { queryOne } from "@/lib/db";
+import { ensureSchema, queryOne } from "@/lib/db";
 import { env } from "@/lib/env";
 import { deleteReportAction, revokeShareAction, rotateShareAction } from "@/lib/actions/reports";
 import CopyLink from "@/components/CopyLink";
 import PrintButton from "@/components/PrintButton";
 import ReportView from "@/components/report/ReportView";
 import { hasSellbot } from "@/lib/platforms/sellbot";
+import { sanitizeLayout } from "@/lib/report-template";
 import type { ReportAnalysis, ReportData } from "@/lib/types";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -17,6 +18,7 @@ interface Row {
   client_id: number;
   data: ReportData;
   analysis: ReportAnalysis | null;
+  template: unknown;
   share_token: string;
   share_expires_at: Date | null;
   share_revoked: boolean;
@@ -27,13 +29,15 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   if (!UUID.test(id)) notFound();
 
+  await ensureSchema();
   const r = await queryOne<Row>(
-    `SELECT id, client_id, data, analysis, share_token, share_expires_at, share_revoked
+    `SELECT id, client_id, data, analysis, template, share_token, share_expires_at, share_revoked
      FROM reports WHERE id = $1`,
     [id],
   );
   if (!r) notFound();
 
+  const template = sanitizeLayout(r.template);
   const shareUrl = new URL(`/r/${r.share_token}`, env().APP_URL).toString();
   const expired = r.share_expires_at !== null && r.share_expires_at < new Date();
   const shareActive = !r.share_revoked && !expired;
@@ -99,13 +103,17 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
         </p>
       )}
 
-      {!r.analysis && (
+      {template && (
+        <p className="muted small no-print" style={{ margin: 0 }}>Gerado com o modelo <strong>{(r.template as { name?: string }).name ?? "personalizado"}</strong>.</p>
+      )}
+
+      {!r.analysis && template?.sections.analysis !== false && (
         <p className="muted no-print">
           A análise em texto não foi gerada (chave da Claude ausente, sem dados ou falha temporária). Números e gráficos estão completos.
         </p>
       )}
 
-      <ReportView data={r.data} analysis={r.analysis} />
+      <ReportView data={r.data} analysis={r.analysis} template={template} />
     </div>
   );
 }

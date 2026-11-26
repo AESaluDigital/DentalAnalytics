@@ -4,6 +4,7 @@ import { can, requirePermission } from "@/lib/auth";
 import { query, queryOne } from "@/lib/db";
 import { formatDateBr, todayIso } from "@/lib/dates";
 import GenerateReportForm from "@/components/GenerateReportForm";
+import { listTemplates } from "@/lib/templates";
 import { hasSellbot } from "@/lib/platforms/sellbot";
 import type { ClientRow } from "@/lib/types";
 
@@ -37,6 +38,9 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
      WHERE r.client_id = $1 ORDER BY r.created_at DESC LIMIT 50`,
     [id],
   );
+
+  const templates = can(user, "export_reports") ? await listTemplates() : [];
+  const myTemplate = templates.find((t) => t.clientIds.includes(client.id));
 
   const accounts = [
     { label: "Meta Ads", value: client.meta_ad_account_id ? `act_${client.meta_ad_account_id}` : null,
@@ -76,7 +80,10 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
-      {can(user, "export_reports") && <GenerateReportForm clientId={client.id} today={todayIso()} />}
+      {can(user, "export_reports") && (
+        <GenerateReportForm clientId={client.id} today={todayIso()} clientTemplate={myTemplate?.name ?? null}
+          templates={templates.map((t) => ({ id: t.id, name: t.name }))} />
+      )}
 
       <div className="card">
         <h2 style={{ marginBottom: 12 }}>Relatórios gerados</h2>

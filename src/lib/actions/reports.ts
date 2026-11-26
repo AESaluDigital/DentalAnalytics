@@ -4,12 +4,13 @@ import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "../auth";
-import { query, queryOne } from "../db";
+import { ensureSchema, query, queryOne } from "../db";
 import { env } from "../env";
 import { daysBetween, isIsoDate, todayIso } from "../dates";
 import { buildReportData } from "../report/build";
 import { generateAnalysis } from "../report/analysis";
 import { hasSellbot } from "../platforms/sellbot";
+import { resolveLayout } from "../templates";
 import type { ClientRow } from "../types";
 
 export interface GenerateState {
@@ -36,6 +37,15 @@ function shareExpiry(): Date | null {
 
 type Created = { ok: true; id: string } | { ok: false; error: string };
 
+/** Modelo escolhido na geração: "client" = padrão do cliente; número = modelo; null = relatório completo. */
+export type TemplateChoice = number | "client" | null;
+
+function parseChoice(v: unknown): TemplateChoice {
+  if (v === "none" || v === null) return null;
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 ? n : "client";
+}
+
 /** Valida, consulta as plataformas, gera a análise (opcional) e salva o relatório. */
 async function createReport(
   userId: number,
@@ -43,6 +53,7 @@ async function createReport(
   start: string,
   end: string,
   withAnalysis: boolean,
+  choice: TemplateChoice = "client",
 ): Promise<Created> {
   if (!Number.isInteger(clientId)) return { ok: false, error: "Cliente inválido." };
   if (!isIsoDate(start) || !isIsoDate(end)) return { ok: false, error: "Datas inválidas." };
@@ -60,13 +71,18 @@ async function createReport(
     return { ok: false, error: "Sem nenhuma conta vinculada." };
   }
 
+  await ensureSchema();
+  const template = await resolveLayout(choice, client.id);
+  if (typeof choice === "number" && !template) return { ok: false, error: "Modelo não encontrado." };
   const data = await buildReportData(client, { start, end });
-  const analysis = withAnalysis ? await generateAnalysis(data) : null;
+  // Modelo sem o resumo executivo: não gasta tempo com a IA.
+  const analysis = withAnalysis && template?.layout.sections.analysis !== false ? await generateAnalysis(data) : null;
 
   const row = await queryOne<{ id: string }>(
-    `INSERT INTO reports (client_id, period_start, period_end, data, analysis, share_token, share_expires_at, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-    [client.id, start, end, JSON.stringify(data), analysis ? JSON.stringify(analysis) : null, newShareToken(), shareExpiry(), userId],
+    `INSERT INTO reports (client_id, period_start, period_end, data, analysis, share_token, share_expires_at, created_by, template)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+    [client.id, start, end, JSON.stringify(data), analysis ? JSON.stringify(analysis) : null, newShareToken(), shareExpiry(), userId,
+     template ? JSON.stringify({ id: template.id, name: template.name, ...template.layout }) : null],
   );
   revalidatePath(`/clients/${client.id}`);
   revalidatePath("/reports");
@@ -81,6 +97,7 @@ export async function generateReportAction(_prev: GenerateState, form: FormData)
     String(form.get("start") ?? ""),
     String(form.get("end") ?? ""),
     true,
+    parseChoice(form.get("template")),
   );
   if (!res.ok) return { error: res.error };
   redirect(`/reports/${res.id}`);
@@ -95,10 +112,11 @@ export async function generateOneReportAction(
   start: string,
   end: string,
   withAnalysis: boolean,
+  template: number | "client" | "none" = "client",
 ): Promise<Created> {
   const user = await requirePermission("export_reports");
   try {
-    return await createReport(user.id, clientId, start, end, withAnalysis);
+    return await createReport(user.id, clientId, start, end, withAnalysis, parseChoice(template));
   } catch (err) {
     console.error("[reports] falha na geração em massa", err);
     return { ok: false, error: "Falha inesperada ao gerar." };

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { queryOne } from "@/lib/db";
+import { ensureSchema, queryOne } from "@/lib/db";
 import ReportView from "@/components/report/ReportView";
 import PrintButton from "@/components/PrintButton";
 import Logo from "@/components/Logo";
+import { sanitizeLayout } from "@/lib/report-template";
 import type { ReportAnalysis, ReportData } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -21,8 +22,9 @@ export default async function PublicReportPage({ params }: { params: Promise<{ t
   const { token } = await params;
   if (!TOKEN.test(token)) notFound();
 
-  const r = await queryOne<{ data: ReportData; analysis: ReportAnalysis | null }>(
-    `SELECT data, analysis FROM reports
+  await ensureSchema();
+  const r = await queryOne<{ data: ReportData; analysis: ReportAnalysis | null; template: unknown }>(
+    `SELECT data, analysis, template FROM reports
      WHERE share_token = $1 AND share_revoked = FALSE
        AND (share_expires_at IS NULL OR share_expires_at > now())`,
     [token],
@@ -34,7 +36,7 @@ export default async function PublicReportPage({ params }: { params: Promise<{ t
       <div className="row no-print" style={{ justifyContent: "flex-end" }}>
         <PrintButton />
       </div>
-      <ReportView data={r.data} analysis={r.analysis} />
+      <ReportView data={r.data} analysis={r.analysis} template={sanitizeLayout(r.template)} />
       <footer className="public-footer">
         <span>Relatório gerado pela</span>
         <Logo height={22} />

@@ -37,10 +37,12 @@ export default function BulkReports({
   clients,
   today,
   initial,
+  templates,
 }: {
   clients: ClientOpt[];
   today: string;
-  initial: { clientId: number | null; start: string | null; end: string | null };
+  initial: { clientId: number | null; start: string | null; end: string | null; template: number | null };
+  templates: { id: number; name: string }[];
 }) {
   const router = useRouter();
   const options = presets(today);
@@ -53,6 +55,9 @@ export default function BulkReports({
     () => new Set(initial.clientId ? [initial.clientId] : eligible.map((c) => c.id)),
   );
   const [withAnalysis, setWithAnalysis] = useState(true);
+  const [template, setTemplate] = useState<string>(
+    initial.template && templates.some((t) => t.id === initial.template) ? String(initial.template) : "client",
+  );
   const [filter, setFilter] = useState("");
   const [status, setStatus] = useState<Map<number, Status>>(new Map());
   const [running, setRunning] = useState(false);
@@ -83,7 +88,8 @@ export default function BulkReports({
       for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
         set(id, { s: "run" });
         try {
-          const r = await generateOneReportAction(id, range.start, range.end, withAnalysis);
+          const r = await generateOneReportAction(id, range.start, range.end, withAnalysis,
+            template === "client" || template === "none" ? template : Number(template));
           set(id, r.ok ? { s: "ok", id: r.id } : { s: "err", error: r.error });
         } catch {
           set(id, { s: "err", error: "Tempo esgotado ou conexão perdida." });
@@ -130,6 +136,21 @@ export default function BulkReports({
                 onChange={(e) => setRange((r) => ({ ...r, end: e.target.value }))} />
             </label>
           </div>
+          <label>
+            Modelo do relatório
+            <select value={template} disabled={running} onChange={(e) => setTemplate(e.target.value)}>
+              <option value="client">Modelo de cada cliente (padrão)</option>
+              <option value="none">Relatório completo (sem modelo)</option>
+              {templates.length > 0 && (
+                <optgroup label="Mesmo modelo para todos os selecionados">
+                  {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </optgroup>
+              )}
+            </select>
+          </label>
+          <span className="muted small" style={{ marginTop: -6 }}>
+            <Link href="/reports/templates">Criar ou editar modelos →</Link>
+          </span>
           <label className="checkbox">
             <input type="checkbox" checked={withAnalysis} disabled={running} onChange={(e) => setWithAnalysis(e.target.checked)} />
             Incluir resumo com IA (mais lento)
