@@ -36,6 +36,8 @@ export interface OverviewClient {
   expected: number | null;
   /** Investimento ÷ esperado − 1 (ex.: 0,15 = 15% acima do ritmo do orçamento). */
   pace: number | null;
+  /** Mesmas métricas no período anterior (null = não foi possível consultar). */
+  previous: { totals: AdsTotals; kpis: OverviewClient["kpis"] } | null;
 }
 
 export interface AttentionReason {
@@ -50,6 +52,9 @@ export interface Overview {
   monthFraction: number;
   clients: OverviewClient[];
   averages: { conversionRate: number | null; cpl: number | null };
+  /** Período de comparação: mesmos dias do mês anterior (mês em andamento) ou o mês anterior inteiro. */
+  previousRange: DateRange;
+  previousAverages: { conversionRate: number | null; cpl: number | null };
   fetchedAt: number;
 }
 
@@ -74,6 +79,15 @@ export function monthRange(month: string | undefined, today = todayIso()): { mon
   return { month: start, range: { start, end: addDays(start, days - 1) }, fraction: 1 };
 }
 
+/** Mês anterior: do dia 1 até o mesmo dia (limitado ao tamanho do mês) ou inteiro, se o período for o mês inteiro. */
+export function comparisonRange(range: DateRange, fraction: number): DateRange {
+  const start = addDays(range.start, -1).slice(0, 8) + "01";
+  const days = daysIn(start);
+  if (fraction >= 1) return { start, end: addDays(start, days - 1) };
+  const day = Math.min(Number(range.end.slice(8, 10)), days);
+  return { start, end: addDays(start, day - 1) };
+}
+
 const CLIENT_COLS = "id, name, meta_ad_account_id, meta_conversion_action, google_ads_customer_id, ga4_property_id, active";
 const TTL_MS = 10 * 60_000;
 const cache = new Map<string, { at: number; data: Promise<Overview> }>();
@@ -81,7 +95,15 @@ const cache = new Map<string, { at: number; data: Promise<Overview> }>();
 const errText = (err: unknown, platform: string) =>
   err instanceof PlatformError ? `${platform}: ${err.message}` : `${platform}: erro inesperado`;
 
-async function clientRow(c: ClientRow, range: DateRange, budget: number | null, fraction: number, sellbot: boolean): Promise<OverviewClient> {
+const kpisOf = (t: AdsTotals): OverviewClient["kpis"] => ({
+  cpl: ratio(t.spend, t.conversions),
+  cpc: ratio(t.spend, t.clicks),
+  ctr: ratio(t.clicks, t.impressions),
+  conversionRate: ratio(t.conversions, t.clicks),
+  roas: ratio(t.conversionValue, t.spend),
+});
+
+async function periodTotals(c: ClientRow, range: DateRange): Promise<{ currency: string; totals: AdsTotals; errors: string[] }> {
   const demo = env().DEMO_MODE === "true";
   const prev = previousRange(range);
   const errors: string[] = [];
@@ -107,6 +129,11 @@ async function clientRow(c: ClientRow, range: DateRange, budget: number | null, 
     totals = sumAds(totals, t);
     currency = p.currency;
   }
+  return { currency, totals, errors };
+}
+
+async function clientRow(c: ClientRow, range: DateRange, prevRange: DateRange, budget: number | null, fraction: number, sellbot: boolean): Promise<OverviewClient> {
+  const [{ currency, totals, errors }, prev] = await Promise.all([periodTotals(c, range), periodTotals(c, prevRange)]);
   const expected = budget !== null ? budget * fraction : null;
   return {
     id: c.id,
@@ -115,17 +142,12 @@ async function clientRow(c: ClientRow, range: DateRange, budget: number | null, 
     currency,
     totals,
     errors,
-    kpis: {
-      cpl: ratio(totals.spend, totals.conversions),
-      cpc: ratio(totals.spend, totals.clicks),
-      ctr: ratio(totals.clicks, totals.impressions),
-      conversionRate: ratio(totals.conversions, totals.clicks),
-      roas: ratio(totals.conversionValue, totals.spend),
-    },
+    kpis: kpisOf(totals),
     budget,
     expected,
     // Com alguma plataforma sem responder o investimento está incompleto: não compara com o orçamento.
     pace: expected && expected > 0 && errors.length === 0 ? totals.spend / expected - 1 : null,
+    previous: prev.errors.length ? null : { totals: prev.totals, kpis: kpisOf(prev.totals) },
   };
 }
 
@@ -151,7 +173,9 @@ async function build(month: string, range: DateRange, fraction: number): Promise
     return rows.length ? rows.reduce((a, b) => a + Number(b.amount), 0) : null;
   };
 
-  const rows = await Promise.all(clients.map((c) => clientRow(c, range, budgetOf(c.id), fraction, sellbot.has(c.id))));
+  const prevRange = comparisonRange(range, fraction);
+  const rows = await Promise.all(clients.map((c) => clientRow(c, range, prevRange, budgetOf(c.id), fraction, sellbot.has(c.id))));
+  const prevActive = rows.filter((r) => r.previous && r.previous.totals.spend > 0);
   // Média simples entre os clientes que têm o indicador no período.
   const active = rows.filter((r) => r.totals.spend > 0);
   return {
@@ -162,6 +186,11 @@ async function build(month: string, range: DateRange, fraction: number): Promise
     averages: {
       conversionRate: mean(active.map((r) => r.kpis.conversionRate)),
       cpl: mean(active.map((r) => r.kpis.cpl)),
+    },
+    previousRange: prevRange,
+    previousAverages: {
+      conversionRate: mean(prevActive.map((r) => r.previous!.kpis.conversionRate)),
+      cpl: mean(prevActive.map((r) => r.previous!.kpis.cpl)),
     },
     fetchedAt: Date.now(),
   };

@@ -2,7 +2,9 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { can, requirePermission, type SessionUser } from "@/lib/auth";
 import { todayIso, addDays } from "@/lib/dates";
-import { int, money, pct } from "@/lib/format";
+import { int, money, pct, signedPct } from "@/lib/format";
+import { delta } from "@/lib/metrics";
+import { formatDateBr } from "@/lib/dates";
 import { attentionReasons, BUDGET_TOLERANCE, getOverview, monthRange, type AttentionReason, type Overview, type OverviewClient } from "@/lib/overview";
 import { listComments, type AttentionComment } from "@/lib/attention";
 import { addCommentAction, replyAction, setStatusAction } from "@/lib/actions/attention";
@@ -31,6 +33,31 @@ function CName({ name, alias, strong = true }: { name: string; alias: string; st
       <span className="cname-alias" aria-hidden>{alias}</span>
     </Tag>
   );
+}
+
+/** Variação contra o período anterior; "inverse" = cair é bom (CPL). */
+function trend(d: number, inverse: boolean): "good" | "bad" | null {
+  return Math.abs(d) < 0.005 ? null : (d > 0) !== inverse ? "good" : "bad";
+}
+const arrow = (d: number) => (d > 0 ? "▲" : d < 0 ? "▼" : "•");
+
+function Delta({ cur, prev, inverse = false, label }: { cur: number | null; prev: number | null; inverse?: boolean; label: string }) {
+  const d = delta(cur, prev);
+  if (d === null) return <span className="kpi-delta"><span className="muted">sem base de comparação</span></span>;
+  const tone = trend(d, inverse);
+  return (
+    <span className={`kpi-delta${tone === "good" ? " up-good" : tone === "bad" ? " down-bad" : ""}`}>
+      {arrow(d)} {signedPct(d)} <span className="muted">{label}</span>
+    </span>
+  );
+}
+
+/** Variação pequena dentro da célula da tabela. */
+function CellDelta({ cur, prev, inverse = false }: { cur: number | null; prev: number | null; inverse?: boolean }) {
+  const d = delta(cur, prev);
+  if (d === null) return null;
+  const tone = trend(d, inverse);
+  return <div className={`cell-delta${tone ? ` ${tone}` : ""}`}>{arrow(d)} {signedPct(d)}</div>;
 }
 
 function ChatIcon() {
@@ -188,7 +215,13 @@ async function Body({ user, monthParam, force, back }: { user: SessionUser; mont
     (a, c) => ({ spend: a.spend + c.totals.spend, conv: a.conv + c.totals.conversions, clicks: a.clicks + c.totals.clicks }),
     { spend: 0, conv: 0, clicks: 0 },
   );
+  // Anterior só com os clientes que responderam nos dois períodos (comparação justa).
+  const both = data.clients.filter((c) => c.previous && c.errors.length === 0);
+  const prevSum = both.reduce((a, c) => ({ spend: a.spend + c.previous!.totals.spend, conv: a.conv + c.previous!.totals.conversions }), { spend: 0, conv: 0 });
+  const curBoth = both.reduce((a, c) => ({ spend: a.spend + c.totals.spend, conv: a.conv + c.totals.conversions }), { spend: 0, conv: 0 });
   const avg = data.averages;
+  const pavg = data.previousAverages;
+  const vs = "vs. anterior";
   const nameCell = (c: OverviewClient) => (
     <div className="row" style={{ flexWrap: "nowrap", gap: 10 }}>
       <Avatar name={c.name} />
@@ -202,22 +235,91 @@ async function Body({ user, monthParam, force, back }: { user: SessionUser; mont
   return (
     <>
       <span className="muted small">
-        {monthLabel(data.month)}{data.monthFraction < 1 ? " (até hoje)" : ""} · Meta Ads + Google Ads · consultado às{" "}
+        {monthLabel(data.month)}{data.monthFraction < 1 ? " (até hoje)" : ""} · comparado com {formatDateBr(data.previousRange.start)} a {formatDateBr(data.previousRange.end)} · Meta Ads + Google Ads · consultado às{" "}
         {new Date(data.fetchedAt).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}
       </span>
 
-      <div className="kpi-grid">
+      <div className="kpi-grid overview-kpis">
         <div className="kpi"><span className="kpi-label">Investimento total</span><span className="kpi-value">{money(sum.spend)}</span>
+          <Delta cur={curBoth.spend} prev={prevSum.spend} label={vs} />
           <span className="kpi-delta"><span className="muted">{data.clients.filter((c) => c.totals.spend > 0).length} clientes com investimento</span></span></div>
-        <div className="kpi"><span className="kpi-label">Conversões</span><span className="kpi-value">{int(sum.conv)}</span></div>
+        <div className="kpi"><span className="kpi-label">Conversões</span><span className="kpi-value">{int(sum.conv)}</span>
+          <Delta cur={curBoth.conv} prev={prevSum.conv} label={vs} /></div>
         <div className="kpi"><span className="kpi-label">CPL médio<InfoTip label="CPL médio" text="Média simples do CPL dos clientes com investimento no período (cada cliente pesa igual). É a régua do ponto de atenção." /></span>
-          <span className="kpi-value">{money(avg.cpl)}</span></div>
+          <span className="kpi-value">{money(avg.cpl)}</span><Delta cur={avg.cpl} prev={pavg.cpl} inverse label={vs} /></div>
         <div className="kpi"><span className="kpi-label">% conversão média<InfoTip label="% conversão média" text="Média simples da taxa de conversão (conversões ÷ cliques) dos clientes com investimento no período. É a régua do ponto de atenção." /></span>
-          <span className="kpi-value">{pct(avg.conversionRate)}</span></div>
+          <span className="kpi-value">{pct(avg.conversionRate)}</span><Delta cur={avg.conversionRate} prev={pavg.conversionRate} label={vs} /></div>
         <div className={`kpi${attention.length ? " kpi-tone-warn" : ""}`}><span className="kpi-label">Em ponto de atenção</span>
           <span className="kpi-value">{int(attention.length)}</span><span className="kpi-delta"><span className="muted">de {data.clients.length} clientes</span></span></div>
       </div>
 
+      {/* ---------- Todos os clientes ---------- */}
+      <section className="card stack">
+        <h2 style={{ margin: 0 }}>Todos os clientes</h2>
+        <div className="table-wrap overview-table">
+          <table>
+            <thead>
+              <tr>
+                <Th label="Cliente" num={false} />
+                <Th label="Investimento" help="spendTotal" />
+                <Th label="Conversões" help="conversions" />
+                <Th label="CPL" help="cpl" />
+                <Th label="CPC" help="cpc" />
+                <Th label="% cliques" help="ctr" />
+                <Th label="% conversão" help="conversionRate" />
+                <Th label="ROAS" help="roas" />
+                <Th label="vs. orçado" />
+                <th aria-label="Ações" />
+              </tr>
+            </thead>
+            <tbody>
+              {data.clients.map((c) => {
+                const k = c.kpis;
+                const has = c.totals.spend > 0;
+                const crBad = has && avg.conversionRate !== null && (k.conversionRate ?? 0) < avg.conversionRate;
+                const cplBad = has && avg.cpl !== null && (k.cpl === null || k.cpl > avg.cpl);
+                const openN = openByClient.get(c.id)?.length ?? 0;
+                const pv = c.errors.length ? null : c.previous;
+                return (
+                  <tr key={c.id}>
+                    <td className="name">
+                      {nameCell(c)}
+                      {c.errors.length > 0 && <div className="error small" title={c.errors.join(" · ")}>⚠ falha ao consultar</div>}
+                    </td>
+                    <td className="num">{money(c.totals.spend, c.currency)}<CellDelta cur={c.totals.spend} prev={pv?.totals.spend ?? null} /></td>
+                    <td className="num">{int(c.totals.conversions)}<CellDelta cur={c.totals.conversions} prev={pv?.totals.conversions ?? null} /></td>
+                    <td className={`num${cplBad ? " cell-bad" : ""}`}>{money(k.cpl, c.currency)}<CellDelta cur={k.cpl} prev={pv?.kpis.cpl ?? null} inverse /></td>
+                    <td className="num">{money(k.cpc, c.currency)}<CellDelta cur={k.cpc} prev={pv?.kpis.cpc ?? null} inverse /></td>
+                    <td className="num">{pct(k.ctr, 2)}<CellDelta cur={k.ctr} prev={pv?.kpis.ctr ?? null} /></td>
+                    <td className={`num${crBad ? " cell-bad" : ""}`}>{pct(k.conversionRate, 2)}<CellDelta cur={k.conversionRate} prev={pv?.kpis.conversionRate ?? null} /></td>
+                    <td className="num">{k.roas === null || k.roas < 0.01 ? "—" : `${k.roas.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}x`}</td>
+                    <td className="num">{paceText(c)}</td>
+                    <td>
+                      <div className="overview-actions">
+                        <button type="button" className="btn icon icon-btn-svg" popoverTarget={`comentar-${c.id}`}
+                          title="Comentar ponto de atenção" aria-label="Comentar ponto de atenção">
+                          <ChatIcon />{openN > 0 && <span className="count-dot">{openN}</span>}
+                        </button>
+                        <div id={`comentar-${c.id}`} popover="auto" className="comment-pop">
+                          <h3>Ponto de atenção · <CName name={c.name} alias={aliasOf.get(c.id)!} strong={false} /></h3>
+                          <CommentForm clientId={c.id} back={back} />
+                        </div>
+                        {canDash && (
+                          <Link className="btn icon" href={dashHref(c.id)} title="Abrir dashboard" aria-label="Abrir dashboard">→</Link>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="muted small" style={{ margin: 0 }}>
+          Investimento e conversões somam Meta Ads e Google Ads. “vs. orçado” compara o investimento com o orçamento do mês proporcional aos dias
+          {data.monthFraction < 1 ? " já passados" : ""}. Destaques em vermelho ficam piores que a média dos clientes.
+        </p>
+      </section>
       {/* ---------- Pontos de atenção ---------- */}
       <section className="card stack" id="atencao">
         <div className="row between">
@@ -265,72 +367,6 @@ async function Body({ user, monthParam, force, back }: { user: SessionUser; mont
         )}
       </section>
 
-      {/* ---------- Todos os clientes ---------- */}
-      <section className="card stack">
-        <h2 style={{ margin: 0 }}>Todos os clientes</h2>
-        <div className="table-wrap overview-table">
-          <table>
-            <thead>
-              <tr>
-                <Th label="Cliente" num={false} />
-                <Th label="Investimento" help="spendTotal" />
-                <Th label="Conversões" help="conversions" />
-                <Th label="CPL" help="cpl" />
-                <Th label="CPC" help="cpc" />
-                <Th label="% cliques" help="ctr" />
-                <Th label="% conversão" help="conversionRate" />
-                <Th label="ROAS" help="roas" />
-                <Th label="vs. orçado" />
-                <th aria-label="Ações" />
-              </tr>
-            </thead>
-            <tbody>
-              {data.clients.map((c) => {
-                const k = c.kpis;
-                const has = c.totals.spend > 0;
-                const crBad = has && avg.conversionRate !== null && (k.conversionRate ?? 0) < avg.conversionRate;
-                const cplBad = has && avg.cpl !== null && (k.cpl === null || k.cpl > avg.cpl);
-                const openN = openByClient.get(c.id)?.length ?? 0;
-                return (
-                  <tr key={c.id}>
-                    <td className="name">
-                      {nameCell(c)}
-                      {c.errors.length > 0 && <div className="error small" title={c.errors.join(" · ")}>⚠ falha ao consultar</div>}
-                    </td>
-                    <td className="num">{money(c.totals.spend, c.currency)}</td>
-                    <td className="num">{int(c.totals.conversions)}</td>
-                    <td className={`num${cplBad ? " cell-bad" : ""}`}>{money(k.cpl, c.currency)}</td>
-                    <td className="num">{money(k.cpc, c.currency)}</td>
-                    <td className="num">{pct(k.ctr, 2)}</td>
-                    <td className={`num${crBad ? " cell-bad" : ""}`}>{pct(k.conversionRate, 2)}</td>
-                    <td className="num">{k.roas === null || k.roas < 0.01 ? "—" : `${k.roas.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}x`}</td>
-                    <td className="num">{paceText(c)}</td>
-                    <td>
-                      <div className="overview-actions">
-                        <button type="button" className="btn icon icon-btn-svg" popoverTarget={`comentar-${c.id}`}
-                          title="Comentar ponto de atenção" aria-label="Comentar ponto de atenção">
-                          <ChatIcon />{openN > 0 && <span className="count-dot">{openN}</span>}
-                        </button>
-                        <div id={`comentar-${c.id}`} popover="auto" className="comment-pop">
-                          <h3>Ponto de atenção · <CName name={c.name} alias={aliasOf.get(c.id)!} strong={false} /></h3>
-                          <CommentForm clientId={c.id} back={back} />
-                        </div>
-                        {canDash && (
-                          <Link className="btn icon" href={dashHref(c.id)} title="Abrir dashboard" aria-label="Abrir dashboard">→</Link>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <p className="muted small" style={{ margin: 0 }}>
-          Investimento e conversões somam Meta Ads e Google Ads. “vs. orçado” compara o investimento com o orçamento do mês proporcional aos dias
-          {data.monthFraction < 1 ? " já passados" : ""}. Destaques em vermelho ficam piores que a média dos clientes.
-        </p>
-      </section>
     </>
   );
 }

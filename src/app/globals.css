@@ -1006,7 +1006,8 @@ input:focus-visible, select:focus-visible { box-shadow: 0 0 0 4px color-mix(in s
 .overview-table .btn.icon { min-width: 34px; min-height: 34px; padding: 0 8px; }
 .overview-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; }
 .overview-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
-.overview-head input[type="month"] { width: 170px; }
+.overview-head input[type="month"] { width: 200px; padding-right: 10px; }
+.overview-head .btn { white-space: nowrap; }
 td.cell-bad { color: var(--bad); font-weight: 700; }
 .count-dot {
   position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 100px;
@@ -1055,3 +1056,11 @@ a.notif:hover { text-decoration: none; background: color-mix(in srgb, var(--bran
 .notif.unread { background: color-mix(in srgb, var(--brand-teal) 9%, transparent); }
 .notif.unread::before { content: "●"; color: var(--brand-teal); font-size: 10px; }
 .notif-quote { overflow-wrap: anywhere; }
+.overview-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .overview-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .overview-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.overview-kpis .kpi-label { justify-content: space-between; gap: 6px; }
+.cell-delta { font-size: 11px; font-weight: 600; color: var(--muted); margin-top: 2px; }
+.cell-delta.good { color: var(--good); }
+.cell-delta.bad { color: var(--bad); }
+td.cell-bad .cell-delta:not(.good):not(.bad) { color: var(--muted); }
