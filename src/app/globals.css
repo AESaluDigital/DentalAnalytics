@@ -1064,3 +1064,36 @@ a.notif:hover { text-decoration: none; background: color-mix(in srgb, var(--bran
 .cell-delta.good { color: var(--good); }
 .cell-delta.bad { color: var(--bad); }
 td.cell-bad .cell-delta:not(.good):not(.bad) { color: var(--muted); }
+
+/* Visão geral: página mais larga e tabela sem rolagem lateral */
+.container:has(.overview-page) { max-width: 1480px; }
+.overview-table table { table-layout: auto; }
+.overview-table td.name { min-width: 200px; max-width: 260px; }
+.add-comment-btn { align-self: flex-start; }
+.btn.danger-link { color: var(--bad); border-color: transparent; background: transparent; box-shadow: none; }
+.btn[disabled] { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
+.comment[aria-busy="true"] { opacity: 0.8; }
+.comment-pop .comment-form textarea { min-height: 96px; }
+/* Telas menores: cada cliente vira um cartão com as métricas em grade (sem rolar para o lado). */
+@media (max-width: 1320px) {
+  .overview-table { overflow: visible; }
+  .overview-table table, .overview-table tbody { display: block; }
+  .overview-table thead { display: none; }
+  .overview-table tbody { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 12px; }
+  .overview-table tr {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 10px; padding: 12px;
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+  }
+  .overview-table tbody tr:hover td { background: transparent; }
+  .overview-table td { display: block; padding: 0; border: 0; white-space: normal; text-align: left; }
+  .overview-table td.name { grid-column: 1 / -2; max-width: none; min-width: 0; }
+  .overview-table td.actions { grid-column: -2 / -1; grid-row: 1; align-self: start; }
+  .overview-table td[data-label]::before {
+    content: attr(data-label); display: block; font-size: 11px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px;
+  }
+  .overview-table td.num { font-variant-numeric: tabular-nums; }
+  .overview-table td.name + td { border-top: 0; }
+  .overview-table tr > td:nth-child(2) { grid-column: 1; }
+}
+@media (max-width: 520px) { .overview-table tr { grid-template-columns: repeat(2, minmax(0, 1fr)); } .overview-table td.name { grid-column: 1 / -1; } .overview-table td.actions { grid-column: 1 / -1; grid-row: auto; } }

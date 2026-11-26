@@ -4,49 +4,50 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission, requireUser } from "../auth";
 import { queryOne } from "../db";
-import { addComment, addReply, markAllRead, setStatus, type CommentStatus } from "../attention";
+import {
+  addComment, addReply, deleteComment, markAllRead, setStatus,
+  type CommentDTO, type CommentStatus, type ReplyDTO,
+} from "../attention";
 
-/** Só volta para a Visão geral (evita redirecionar para outro site). */
-function back(form: FormData, hash = ""): string {
-  const s = String(form.get("back") ?? "");
-  const base = s.startsWith("/overview") && !s.startsWith("//") ? s : "/overview";
-  return `${base.split("#")[0]}${hash}`;
+/**
+ * Ações dos comentários de pontos de atenção. Devolvem o resultado para a tela se atualizar na hora,
+ * sem recarregar a Visão geral (que consulta Meta/Google de todos os clientes).
+ */
+
+type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+
+const clean = (v: unknown) => String(v ?? "").trim().slice(0, 2000);
+const validId = (v: unknown) => Number.isInteger(v) && (v as number) > 0;
+
+export async function addCommentAction(clientId: number, body: string): Promise<Result<CommentDTO>> {
+  const user = await requirePermission("view_overview");
+  const text = clean(body);
+  if (!validId(clientId) || !text) return { ok: false, error: "Escreva o comentário." };
+  if (!(await queryOne("SELECT 1 FROM clients WHERE id = $1", [clientId]))) return { ok: false, error: "Cliente não encontrado." };
+  return { ok: true, data: await addComment(clientId, user.id, text) };
 }
 
-const text = (form: FormData, key: string) => String(form.get(key) ?? "").trim().slice(0, 2000);
-const id = (form: FormData, key: string) => {
-  const n = Number(form.get(key));
-  return Number.isInteger(n) && n > 0 ? n : null;
-};
-
-export async function addCommentAction(form: FormData): Promise<void> {
+export async function replyAction(commentId: number, body: string): Promise<Result<ReplyDTO>> {
   const user = await requirePermission("view_overview");
-  const clientId = id(form, "clientId");
-  const body = text(form, "body");
-  if (!clientId || !body) redirect(back(form));
-  if (!(await queryOne("SELECT 1 FROM clients WHERE id = $1", [clientId]))) redirect(back(form));
-  await addComment(clientId, user.id, body);
-  revalidatePath("/overview");
-  redirect(back(form, `#atencao-${clientId}`));
+  const text = clean(body);
+  if (!validId(commentId) || !text) return { ok: false, error: "Escreva a resposta." };
+  const reply = await addReply(commentId, user.id, text);
+  return reply ? { ok: true, data: reply } : { ok: false, error: "Comentário não encontrado." };
 }
 
-export async function replyAction(form: FormData): Promise<void> {
+export async function setStatusAction(commentId: number, status: CommentStatus): Promise<Result<CommentDTO>> {
   const user = await requirePermission("view_overview");
-  const commentId = id(form, "commentId");
-  const body = text(form, "body");
-  if (commentId && body) await addReply(commentId, user.id, body);
-  revalidatePath("/overview");
-  redirect(back(form, commentId ? `#comentario-${commentId}` : ""));
+  if (!validId(commentId) || !["open", "resolved", "dismissed"].includes(status)) return { ok: false, error: "Ação inválida." };
+  const c = await setStatus(commentId, user.id, status);
+  return c ? { ok: true, data: c } : { ok: false, error: "Comentário não encontrado." };
 }
 
-export async function setStatusAction(form: FormData): Promise<void> {
+/** Só o autor do comentário (ou uma conta master) pode excluir. */
+export async function deleteCommentAction(commentId: number): Promise<Result<null>> {
   const user = await requirePermission("view_overview");
-  const commentId = id(form, "commentId");
-  const raw = String(form.get("status") ?? "");
-  const status: CommentStatus | null = raw === "open" || raw === "resolved" || raw === "dismissed" ? raw : null;
-  if (commentId && status) await setStatus(commentId, user.id, status);
-  revalidatePath("/overview");
-  redirect(back(form, commentId ? `#comentario-${commentId}` : ""));
+  if (!validId(commentId)) return { ok: false, error: "Ação inválida." };
+  const ok = await deleteComment(commentId, user.id, user.master);
+  return ok ? { ok: true, data: null } : { ok: false, error: "Só quem escreveu pode excluir o comentário." };
 }
 
 export async function markNotificationsReadAction(): Promise<void> {

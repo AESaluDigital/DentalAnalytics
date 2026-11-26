@@ -6,8 +6,8 @@ import { int, money, pct, signedPct } from "@/lib/format";
 import { delta } from "@/lib/metrics";
 import { formatDateBr } from "@/lib/dates";
 import { attentionReasons, BUDGET_TOLERANCE, getOverview, monthRange, type AttentionReason, type Overview, type OverviewClient } from "@/lib/overview";
-import { listComments, type AttentionComment } from "@/lib/attention";
-import { addCommentAction, replyAction, setStatusAction } from "@/lib/actions/attention";
+import { listComments, type CommentDTO } from "@/lib/attention";
+import { ClientThreads, QuickComment } from "@/components/AttentionThreads";
 import HideNamesToggle from "@/components/HideNamesToggle";
 import InfoTip from "@/components/InfoTip";
 import { METRIC_HELP } from "@/lib/metric-help";
@@ -20,9 +20,6 @@ type Search = Promise<{ month?: string; refresh?: string }>;
 
 const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const monthLabel = (m: string) => `${MONTHS[Number(m.slice(5, 7)) - 1]} de ${m.slice(0, 4)}`;
-
-const when = (d: Date) =>
-  d.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 /** Nome do cliente que some quando o olho está fechado (fica o apelido "Cliente 07"). */
 function CName({ name, alias, strong = true }: { name: string; alias: string; strong?: boolean }) {
@@ -108,65 +105,6 @@ function paceText(c: OverviewClient) {
   );
 }
 
-/* ---------- Comentários ---------- */
-
-function CommentForm({ clientId, back, compact = false }: { clientId: number; back: string; compact?: boolean }) {
-  return (
-    <form action={addCommentAction} className={compact ? "stack comment-form compact" : "stack comment-form"}>
-      <input type="hidden" name="clientId" value={clientId} />
-      <input type="hidden" name="back" value={back} />
-      <textarea name="body" required maxLength={2000} rows={compact ? 2 : 3} placeholder="Descreva o ponto de atenção…" aria-label="Comentário" />
-      <div className="row"><button className="btn primary" type="submit">Comentar</button></div>
-    </form>
-  );
-}
-
-const STATUS_LABEL = { open: "em aberto", resolved: "concluído", dismissed: "descartado" } as const;
-
-function Thread({ c, back }: { c: AttentionComment; back: string }) {
-  const open = c.status === "open";
-  return (
-    <article id={`comentario-${c.id}`} className={`comment status-${c.status}`}>
-      <header className="row between">
-        <span className="small">
-          <strong>{c.author ?? "Usuário removido"}</strong> <span className="muted">· {when(c.createdAt)}</span>
-        </span>
-        <span className={`badge comment-badge-${c.status}`}>{STATUS_LABEL[c.status]}</span>
-      </header>
-      <p className="comment-body">{c.body}</p>
-      {c.replies.map((r) => (
-        <div key={r.id} className="reply">
-          <span className="small"><strong>{r.author ?? "Usuário removido"}</strong> <span className="muted">· {when(r.createdAt)}</span></span>
-          <p className="comment-body">{r.body}</p>
-        </div>
-      ))}
-      {!open && c.closedAt && (
-        <p className="muted small" style={{ margin: 0 }}>{STATUS_LABEL[c.status]} por {c.closedBy ?? "—"} em {when(c.closedAt)}</p>
-      )}
-      <div className="row comment-actions">
-        <form action={replyAction} className="row reply-form">
-          <input type="hidden" name="commentId" value={c.id} />
-          <input type="hidden" name="back" value={back} />
-          <input type="text" name="body" required maxLength={2000} placeholder="Responder…" aria-label="Resposta" />
-          <button className="btn" type="submit">Responder</button>
-        </form>
-        <form action={setStatusAction} className="row" style={{ gap: 6 }}>
-          <input type="hidden" name="commentId" value={c.id} />
-          <input type="hidden" name="back" value={back} />
-          {open ? (
-            <>
-              <button className="btn good-btn" type="submit" name="status" value="resolved">✓ Concluir</button>
-              <button className="btn" type="submit" name="status" value="dismissed">Descartar</button>
-            </>
-          ) : (
-            <button className="btn" type="submit" name="status" value="open">Reabrir</button>
-          )}
-        </form>
-      </div>
-    </article>
-  );
-}
-
 /* ---------- Corpo (dados ao vivo) ---------- */
 
 function MiniStat({ label, value, help, tone }: { label: string; value: string; help?: keyof typeof METRIC_HELP; tone?: "bad" }) {
@@ -180,7 +118,7 @@ function MiniStat({ label, value, help, tone }: { label: string; value: string; 
 
 async function Body({ user, monthParam, force, back }: { user: SessionUser; monthParam: string | undefined; force: boolean; back: string }) {
   let data: Overview;
-  let comments: AttentionComment[];
+  let comments: CommentDTO[];
   try {
     [data, comments] = await Promise.all([getOverview(monthParam, force), listComments()]);
   } catch (err) {
@@ -194,8 +132,8 @@ async function Body({ user, monthParam, force, back }: { user: SessionUser; mont
   // Apelido estável (pela ordem de cadastro), para o olho fechado.
   const aliasOf = new Map([...data.clients].sort((a, b) => a.id - b.id).map((c, i) => [c.id, `Cliente ${String(i + 1).padStart(2, "0")}`]));
 
-  const openByClient = new Map<number, AttentionComment[]>();
-  const closedByClient = new Map<number, AttentionComment[]>();
+  const openByClient = new Map<number, CommentDTO[]>();
+  const closedByClient = new Map<number, CommentDTO[]>();
   for (const c of comments) {
     const m = c.status === "open" ? openByClient : closedByClient;
     m.set(c.clientId, [...(m.get(c.clientId) ?? []), c]);
@@ -286,15 +224,15 @@ async function Body({ user, monthParam, force, back }: { user: SessionUser; mont
                       {nameCell(c)}
                       {c.errors.length > 0 && <div className="error small" title={c.errors.join(" · ")}>⚠ falha ao consultar</div>}
                     </td>
-                    <td className="num">{money(c.totals.spend, c.currency)}<CellDelta cur={c.totals.spend} prev={pv?.totals.spend ?? null} /></td>
-                    <td className="num">{int(c.totals.conversions)}<CellDelta cur={c.totals.conversions} prev={pv?.totals.conversions ?? null} /></td>
-                    <td className={`num${cplBad ? " cell-bad" : ""}`}>{money(k.cpl, c.currency)}<CellDelta cur={k.cpl} prev={pv?.kpis.cpl ?? null} inverse /></td>
-                    <td className="num">{money(k.cpc, c.currency)}<CellDelta cur={k.cpc} prev={pv?.kpis.cpc ?? null} inverse /></td>
-                    <td className="num">{pct(k.ctr, 2)}<CellDelta cur={k.ctr} prev={pv?.kpis.ctr ?? null} /></td>
-                    <td className={`num${crBad ? " cell-bad" : ""}`}>{pct(k.conversionRate, 2)}<CellDelta cur={k.conversionRate} prev={pv?.kpis.conversionRate ?? null} /></td>
-                    <td className="num">{k.roas === null || k.roas < 0.01 ? "—" : `${k.roas.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}x`}</td>
-                    <td className="num">{paceText(c)}</td>
-                    <td>
+                    <td className="num" data-label="Investimento">{money(c.totals.spend, c.currency)}<CellDelta cur={c.totals.spend} prev={pv?.totals.spend ?? null} /></td>
+                    <td className="num" data-label="Conversões">{int(c.totals.conversions)}<CellDelta cur={c.totals.conversions} prev={pv?.totals.conversions ?? null} /></td>
+                    <td className={`num${cplBad ? " cell-bad" : ""}`} data-label="CPL">{money(k.cpl, c.currency)}<CellDelta cur={k.cpl} prev={pv?.kpis.cpl ?? null} inverse /></td>
+                    <td className="num" data-label="CPC">{money(k.cpc, c.currency)}<CellDelta cur={k.cpc} prev={pv?.kpis.cpc ?? null} inverse /></td>
+                    <td className="num" data-label="% cliques">{pct(k.ctr, 2)}<CellDelta cur={k.ctr} prev={pv?.kpis.ctr ?? null} /></td>
+                    <td className={`num${crBad ? " cell-bad" : ""}`} data-label="% conversão">{pct(k.conversionRate, 2)}<CellDelta cur={k.conversionRate} prev={pv?.kpis.conversionRate ?? null} /></td>
+                    <td className="num" data-label="ROAS">{k.roas === null || k.roas < 0.01 ? "—" : `${k.roas.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}x`}</td>
+                    <td className="num" data-label="vs. orçado">{paceText(c)}</td>
+                    <td className="actions">
                       <div className="overview-actions">
                         <button type="button" className="btn icon icon-btn-svg" popoverTarget={`comentar-${c.id}`}
                           title="Comentar ponto de atenção" aria-label="Comentar ponto de atenção">
@@ -302,7 +240,7 @@ async function Body({ user, monthParam, force, back }: { user: SessionUser; mont
                         </button>
                         <div id={`comentar-${c.id}`} popover="auto" className="comment-pop">
                           <h3>Ponto de atenção · <CName name={c.name} alias={aliasOf.get(c.id)!} strong={false} /></h3>
-                          <CommentForm clientId={c.id} back={back} />
+                          <QuickComment clientId={c.id} popoverId={`comentar-${c.id}`} />
                         </div>
                         {canDash && (
                           <Link className="btn icon" href={dashHref(c.id)} title="Abrir dashboard" aria-label="Abrir dashboard">→</Link>
@@ -350,17 +288,8 @@ async function Body({ user, monthParam, force, back }: { user: SessionUser; mont
                     tone={reasons.some((r) => r.key === "budget") ? "bad" : undefined} />
                 </div>
                 {c.errors.length > 0 && <p className="error small" style={{ margin: 0 }}>⚠ {c.errors.join(" · ")}</p>}
-                {open.map((cm) => <Thread key={cm.id} c={cm} back={back} />)}
-                {closed.length > 0 && (
-                  <details className="closed-comments">
-                    <summary className="muted small">{closed.length} comentário(s) concluído(s)/descartado(s) recentemente</summary>
-                    {closed.map((cm) => <Thread key={cm.id} c={cm} back={back} />)}
-                  </details>
-                )}
-                <details className="add-comment">
-                  <summary className="btn"><ChatIcon /> Comentar ponto de atenção</summary>
-                  <CommentForm clientId={c.id} back={back} />
-                </details>
+                <ClientThreads key={[...open, ...closed].map((x) => `${x.id}:${x.status}:${x.replies.length}`).join(",")}
+                  clientId={c.id} initial={[...open, ...closed]} meId={user.id} master={user.master} />
               </article>
             ))}
           </div>
@@ -382,7 +311,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
   const back = `/overview?month=${m}`;
 
   return (
-    <div className="stack">
+    <div className="stack overview-page">
       <div className="page-head">
         <div>
           <span className="eyebrow">Carteira</span>
