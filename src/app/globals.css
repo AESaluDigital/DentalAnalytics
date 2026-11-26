@@ -1097,3 +1097,11 @@ td.cell-bad .cell-delta:not(.good):not(.bad) { color: var(--muted); }
   .overview-table tr > td:nth-child(2) { grid-column: 1; }
 }
 @media (max-width: 520px) { .overview-table tr { grid-template-columns: repeat(2, minmax(0, 1fr)); } .overview-table td.name { grid-column: 1 / -1; } .overview-table td.actions { grid-column: 1 / -1; grid-row: auto; } }
+/* Comentário compacto: o formulário de resposta não estica o cartão */
+.comment { gap: 8px; padding: 10px 12px; }
+.comment > .reply-form { flex: none; flex-wrap: nowrap; gap: 6px; }
+.comment > .reply-form input { height: 34px; }
+.comment > .reply-form .btn, .comment .btn { min-height: 34px; padding: 0 12px; font-size: 13px; }
+.comment > .reply-form > .row { flex-wrap: nowrap; }
+.comment-body { line-height: 1.45; }
+.attention-card { align-self: start; }
