@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { logoutAction } from "@/lib/actions/auth";
 import Logo from "./Logo";
 import AppearancePicker from "./AppearancePicker";
+import NavProgress from "./NavProgress";
 
 export interface NavItem {
   href: string;
@@ -53,6 +54,7 @@ export default function AppShell({ user, primary, items, demo, children }: Props
 
   return (
     <>
+      <Suspense fallback={null}><NavProgress /></Suspense>
       <header className="topbar">
         <div className="inner">
           <div className="row" style={{ gap: 10, flexWrap: "nowrap" }}>
@@ -61,7 +63,7 @@ export default function AppShell({ user, primary, items, demo, children }: Props
               <span className="burger" aria-hidden><i /><i /><i /></span>
             </button>
             <Link href="/dashboard" className="brand" aria-label="SuperDental — início">
-              <Logo height={28} />
+              <Logo height={32} />
               <span className="brand-sub">Relatórios</span>
             </Link>
             {demo && <span className="badge demo">modo demonstração</span>}
@@ -88,7 +90,7 @@ export default function AppShell({ user, primary, items, demo, children }: Props
       <aside id="side-menu" className={`drawer${open ? " open" : ""}`} aria-label="Menu" aria-hidden={!open}
         inert={!open}>
         <div className="drawer-head">
-          <Logo height={26} />
+          <Logo height={30} />
           <button type="button" className="btn icon" aria-label="Fechar menu" onClick={() => setOpen(false)}>✕</button>
         </div>
         <nav className="drawer-nav">

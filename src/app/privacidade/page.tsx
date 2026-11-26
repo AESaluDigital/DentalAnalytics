@@ -40,7 +40,7 @@ export default function PrivacyPage() {
   return (
     <main className="legal-shell">
       <header className="legal-head">
-        <Link href="/" aria-label="Início"><Logo height={32} /></Link>
+        <Link href="/" aria-label="Início"><Logo height={36} /></Link>
         <h1>Política de Privacidade</h1>
         <p className="muted">Última atualização: {UPDATED}</p>
       </header>

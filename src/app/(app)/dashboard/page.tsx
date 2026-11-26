@@ -74,7 +74,7 @@ async function Budget({ client, canEdit, back, ok, error }: { client: ClientRow;
   return <BudgetSection data={data} clientId={client.id} canEdit={canEdit} back={back} ok={ok} error={error} />;
 }
 
-async function LiveData({ client, start, end, force, canExport, canManage }: { client: ClientRow; start: string; end: string; force: boolean; canExport: boolean; canManage: boolean }) {
+async function LiveData({ client, start, end, force, canExport, canManage, canEditClient }: { client: ClientRow; start: string; end: string; force: boolean; canExport: boolean; canManage: boolean; canEditClient: boolean }) {
   let live: Awaited<ReturnType<typeof getLiveData>>;
   try {
     live = await getLiveData(client, { start, end }, force);
@@ -89,12 +89,17 @@ async function LiveData({ client, start, end, force, canExport, canManage }: { c
           Dados consultados nas plataformas às{" "}
           {new Date(fetchedAt).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo" })}
         </span>
-        {canExport && (
-          // Dashboard é só visualização; relatórios (inclusive em massa) são gerados na tela Relatórios.
-          <Link className="btn" href={`/reports?client=${client.id}&start=${start}&end=${end}`}>
-            Gerar relatório na tela Relatórios →
-          </Link>
-        )}
+        <div className="row">
+          {canEditClient && (
+            <Link className="btn" href={`/clients/${client.id}/edit`}>✎ Editar cliente</Link>
+          )}
+          {canExport && (
+            // Dashboard é só visualização; relatórios (inclusive em massa) são gerados na tela Relatórios.
+            <Link className="btn" href={`/reports?client=${client.id}&start=${start}&end=${end}`}>
+              Gerar relatório na tela Relatórios →
+            </Link>
+          )}
+        </div>
       </div>
       <Sources data={data} clientId={client.id} canManage={canManage} />
       <ReportView data={data} analysis={null} />
@@ -151,7 +156,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
           }
         >
           <LiveData client={client} start={start} end={end} force={Boolean(sp.refresh)} canExport={can(user, "export_reports")}
-            canManage={can(user, "manage_clients") || can(user, "manage_integrations")} />
+            canManage={can(user, "manage_clients") || can(user, "manage_integrations")}
+            canEditClient={can(user, "manage_clients")} />
         </Suspense>
       )}
 

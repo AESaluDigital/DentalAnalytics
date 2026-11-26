@@ -14,7 +14,7 @@ export default async function LoginPage() {
     <div className="auth-wrap">
       <div className="auth-theme"><AppearancePicker /></div>
       <div className="auth-card stack">
-        <Logo height={40} />
+        <Logo layout="vertical" height={88} />
         <div>
           <h1>DentalAnalytics</h1>
           <p className="muted" style={{ margin: "6px 0 0" }}>Relatórios de Performance</p>

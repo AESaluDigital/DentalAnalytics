@@ -534,7 +534,7 @@ export default function ReportView({ data, analysis }: { data: ReportData; analy
         </div>
         <div className="by">
           <span>Preparado por</span>
-          <Logo variant="onDark" height={30} />
+          <Logo variant="onDark" height={34} />
         </div>
       </header>
 

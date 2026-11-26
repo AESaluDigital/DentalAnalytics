@@ -37,7 +37,7 @@ export default async function PublicReportPage({ params }: { params: Promise<{ t
       <ReportView data={r.data} analysis={r.analysis} />
       <footer className="public-footer">
         <span>Relatório gerado pela</span>
-        <Logo height={18} />
+        <Logo height={22} />
       </footer>
     </main>
   );
