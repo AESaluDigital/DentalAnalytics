@@ -124,7 +124,9 @@ export function can(user: SessionUser, permission: Permission): boolean {
 
 /** Primeira página que o usuário pode abrir. */
 export function homeFor(user: SessionUser): string {
+  if (can(user, "view_overview")) return "/overview";
   if (can(user, "view_reports")) return "/dashboard";
+  if (can(user, "view_leads")) return "/leads";
   if (can(user, "view_clients")) return "/";
   return "/no-access";
 }

@@ -543,3 +543,31 @@ export async function metaAccountFunds(accountId: string): Promise<AccountFunds>
     text: r.funding_source_details?.display_string ?? null,
   };
 }
+
+/* ---------- Visão geral (consulta leve) ---------- */
+
+/**
+ * Só os totais do período (investimento, impressões, cliques e conversões), com a mesma regra de conversão
+ * do dashboard completo (resultado de cada conjunto). Sem campanhas, anúncios nem criativos.
+ */
+export async function metaTotals(accountId: string, conversionAction: string, range: DateRange): Promise<{ currency: string; totals: AdsTotals }> {
+  const base = "spend,impressions,inline_link_clicks,actions,action_values";
+  const [account, sets, goals] = await Promise.all([
+    insights(accountId, { level: "account", time_range: timeRange(range), fields: `${base},account_currency` }),
+    insights(accountId, { level: "adset", time_range: timeRange(range), fields: `adset_id,${base}`, limit: "500" }).catch(() => [] as InsightRow[]),
+    adSetGoals(accountId).catch(() => new Map<string, AdSetGoal>()),
+  ]);
+  const totals = toTotals(account[0], conversionAction);
+  delete totals.reach;
+  if (sets.length) {
+    const resolve = makeResolver(goals, conversionAction);
+    totals.conversions = 0;
+    totals.conversionValue = 0;
+    for (const r of sets) {
+      const x = resolve(r);
+      totals.conversions += x.conversions;
+      totals.conversionValue += x.value;
+    }
+  }
+  return { currency: account[0]?.account_currency ?? "BRL", totals };
+}

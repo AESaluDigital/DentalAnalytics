@@ -86,3 +86,37 @@ CREATE TABLE IF NOT EXISTS client_budgets (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (client_id, month, platform)
 );
+
+-- Pontos de atenção comentados na Visão geral. status: open | resolved (concluído) | dismissed (descartado).
+CREATE TABLE IF NOT EXISTS attention_comments (
+  id          SERIAL PRIMARY KEY,
+  client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  author_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  body        TEXT NOT NULL CHECK (length(body) BETWEEN 1 AND 2000),
+  status      TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved', 'dismissed')),
+  closed_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  closed_at   TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS attention_comments_client_idx ON attention_comments (client_id, status);
+
+CREATE TABLE IF NOT EXISTS attention_replies (
+  id          SERIAL PRIMARY KEY,
+  comment_id  INTEGER NOT NULL REFERENCES attention_comments(id) ON DELETE CASCADE,
+  author_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  body        TEXT NOT NULL CHECK (length(body) BETWEEN 1 AND 2000),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS attention_replies_comment_idx ON attention_replies (comment_id, created_at);
+
+-- Avisos para quem participa de um comentário (resposta, concluído, descartado).
+CREATE TABLE IF NOT EXISTS notifications (
+  id          SERIAL PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  comment_id  INTEGER REFERENCES attention_comments(id) ON DELETE CASCADE,
+  kind        TEXT NOT NULL CHECK (kind IN ('reply', 'resolved', 'dismissed', 'reopened')),
+  actor_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  read_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications (user_id, read_at, created_at DESC);

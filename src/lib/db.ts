@@ -32,6 +32,35 @@ export async function query<T = QueryResultRow>(text: string, params: unknown[] 
  * Roda uma vez por processo: o site funciona mesmo que o schema ainda não tenha sido aplicado no Supabase.
  */
 let schemaReady: Promise<void> | undefined;
+const ATTENTION_TABLES = ["attention_comments", "attention_replies", "notifications"];
+const ATTENTION_SQL = [
+  `CREATE TABLE IF NOT EXISTS attention_comments (
+    id SERIAL PRIMARY KEY,
+    client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    body TEXT NOT NULL CHECK (length(body) BETWEEN 1 AND 2000),
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved', 'dismissed')),
+    closed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    closed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now())`,
+  "CREATE INDEX IF NOT EXISTS attention_comments_client_idx ON attention_comments (client_id, status)",
+  `CREATE TABLE IF NOT EXISTS attention_replies (
+    id SERIAL PRIMARY KEY,
+    comment_id INTEGER NOT NULL REFERENCES attention_comments(id) ON DELETE CASCADE,
+    author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    body TEXT NOT NULL CHECK (length(body) BETWEEN 1 AND 2000),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now())`,
+  "CREATE INDEX IF NOT EXISTS attention_replies_comment_idx ON attention_replies (comment_id, created_at)",
+  `CREATE TABLE IF NOT EXISTS notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    comment_id INTEGER REFERENCES attention_comments(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('reply', 'resolved', 'dismissed', 'reopened')),
+    actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    read_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now())`,
+  "CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications (user_id, read_at, created_at DESC)",
+];
 export function ensureSchema(): Promise<void> {
   schemaReady ??= (async () => {
     // Só mexe no banco se algo estiver faltando: "ALTER TABLE ... IF NOT EXISTS" pede bloqueio EXCLUSIVO
@@ -43,12 +72,12 @@ export function ensureSchema(): Promise<void> {
            WHERE table_schema = current_schema() AND table_name = 'users' AND column_name IN ('permissions', 'pending')
          UNION ALL
          SELECT 'table', table_name FROM information_schema.tables
-           WHERE table_schema = current_schema() AND table_name IN ('sellbot_connections', 'client_budgets')`,
+           WHERE table_schema = current_schema() AND table_name IN ('sellbot_connections', 'client_budgets', 'attention_comments', 'attention_replies', 'notifications')`,
       );
       const have = new Set(rows.map((r) => `${r.kind}:${r.name}`));
       missing = {
         cols: ["permissions", "pending"].filter((c) => !have.has(`col:${c}`)),
-        tables: ["sellbot_connections", "client_budgets"].filter((t) => !have.has(`table:${t}`)),
+        tables: ["sellbot_connections", "client_budgets", "attention_comments", "attention_replies", "notifications"].filter((t) => !have.has(`table:${t}`)),
       };
     } catch (err) {
       console.error("[db] não foi possível verificar o schema", err);
@@ -83,6 +112,10 @@ export function ensureSchema(): Promise<void> {
         updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         PRIMARY KEY (client_id, month, platform))`);
+      // Pontos de atenção (comentários, respostas e notificações): mesmo SQL do db/schema.sql.
+      if (missing.tables.some((t) => ATTENTION_TABLES.includes(t))) {
+        for (const sql of ATTENTION_SQL) await client.query(sql);
+      }
     } catch (err) {
       console.error("[db] não foi possível garantir o schema", err);
       schemaReady = undefined; // tenta de novo no próximo acesso

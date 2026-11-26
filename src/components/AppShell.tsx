@@ -23,6 +23,10 @@ interface Props {
   /** Todas as opções (menu lateral). */
   items: NavItem[];
   demo: boolean;
+  /** Primeira tela do usuário (logo leva para ela). */
+  home: string;
+  /** Notificações não lidas (sino). */
+  unread: number;
   children: React.ReactNode;
 }
 
@@ -31,7 +35,7 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export default function AppShell({ user, primary, items, demo, children }: Props) {
+export default function AppShell({ user, primary, items, demo, home, unread, children }: Props) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -62,7 +66,7 @@ export default function AppShell({ user, primary, items, demo, children }: Props
               aria-controls="side-menu" onClick={() => setOpen(true)}>
               <span className="burger" aria-hidden><i /><i /><i /></span>
             </button>
-            <Link href="/dashboard" className="brand" aria-label="SuperDental — início">
+            <Link href={home} className="brand" aria-label="SuperDental — início">
               <Logo height={32} />
               <span className="brand-sub">Relatórios</span>
             </Link>
@@ -77,6 +81,14 @@ export default function AppShell({ user, primary, items, demo, children }: Props
             ))}
           </nav>
           <div className="row top-right">
+            <Link href="/notifications" className={`btn icon bell${unread ? " has-unread" : ""}`}
+              aria-label={unread ? `Notificações: ${unread} não lida(s)` : "Notificações"} title="Notificações">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8" />
+                <path d="M10.3 20a1.9 1.9 0 0 0 3.4 0" />
+              </svg>
+              {unread > 0 && <span className="count-dot">{unread > 99 ? "99+" : unread}</span>}
+            </Link>
             <AppearancePicker />
             <button type="button" className="user-chip" onClick={() => setOpen(true)} title={user.email}>
               <span className="user-avatar" aria-hidden>{user.name.trim().charAt(0).toUpperCase()}</span>

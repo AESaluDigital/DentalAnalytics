@@ -378,3 +378,20 @@ export async function googleAccountBudget(customerId: string): Promise<AccountFu
     text: null,
   };
 }
+
+/* ---------- Visão geral (consulta leve) ---------- */
+
+/** Só os totais da conta no período (uma consulta). */
+export async function googleTotals(customerId: string, range: DateRange): Promise<{ currency: string; totals: AdsTotals }> {
+  const rows = await search(customerId, `SELECT customer.currency_code, ${METRICS} FROM customer WHERE ${between(range)}`);
+  const totals = rows.reduce<AdsTotals>((acc, r) => {
+    const t = totalsFrom(r.metrics);
+    acc.spend += t.spend;
+    acc.impressions += t.impressions;
+    acc.clicks += t.clicks;
+    acc.conversions += t.conversions;
+    acc.conversionValue += t.conversionValue;
+    return acc;
+  }, { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversionValue: 0 });
+  return { currency: rows[0]?.customer?.currencyCode ?? "BRL", totals };
+}
