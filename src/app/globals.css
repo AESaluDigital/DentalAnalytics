@@ -277,7 +277,7 @@ h3 { font-size: 1rem; font-weight: 700; }
 
 label { display: flex; flex-direction: column; gap: 5px; font-weight: 600; font-size: 13px; color: var(--ink); }
 label .hint { font-weight: 400; color: var(--muted); font-size: 12px; }
-input[type="text"], input[type="email"], input[type="password"], input[type="date"], input[type="search"], select {
+input[type="text"], input[type="email"], input[type="password"], input[type="date"], input[type="month"], input[type="search"], select {
   font: inherit;
   padding: 9px 12px;
   border: 1px solid var(--axis);
@@ -287,8 +287,15 @@ input[type="text"], input[type="email"], input[type="password"], input[type="dat
   min-width: 0;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-input:hover, select:hover { border-color: var(--brand-teal-lo); }
-input:focus-visible, select:focus-visible {
+textarea {
+  font: inherit; padding: 9px 12px; border: 1px solid var(--axis); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink); min-width: 0; transition: border-color 0.2s, box-shadow 0.2s;
+}
+input[type="date"], input[type="month"] { color-scheme: light; }
+:root[data-theme="dark"] input[type="date"], :root[data-theme="dark"] input[type="month"] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) input[type="date"], :root:not([data-theme="light"]) input[type="month"] { color-scheme: dark; } }
+input:hover, select:hover, textarea:hover { border-color: var(--brand-teal-lo); }
+input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: none; border-color: var(--brand-teal);
   box-shadow: 0 0 0 4px rgba(27, 181, 164, 0.2);
 }
@@ -631,7 +638,7 @@ code.uri { display: block; margin: 6px 0; padding: 8px 10px; overflow-x: auto; w
    ========================================================================= */
 :root { --control-h: 40px; }
 
-input[type="text"], input[type="email"], input[type="password"], input[type="date"], input[type="search"], select {
+input[type="text"], input[type="email"], input[type="password"], input[type="date"], input[type="month"], input[type="search"], select {
   height: var(--control-h);
   padding-top: 0; padding-bottom: 0;
 }
@@ -990,13 +997,22 @@ input:focus-visible, select:focus-visible { box-shadow: 0 0 0 4px color-mix(in s
 .hide-client-names .cname-alias { display: inline; }
 .eye-btn[aria-pressed="true"] { background: var(--btn-bg); color: var(--btn-ink); }
 .overview-table td { vertical-align: middle; }
-.overview-table td.name { min-width: 240px; }
+.overview-table th, .overview-table td { padding: 10px 10px; }
+.overview-table td.name { min-width: 230px; max-width: 300px; }
+.overview-table .client-avatar { width: 32px; height: 32px; border-radius: 10px; font-size: 14px; }
+.overview-table .cname { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.plat-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.plat-badges .badge { padding: 0 7px; font-size: 10.5px; line-height: 17px; }
+.overview-table .btn.icon { min-width: 34px; min-height: 34px; padding: 0 8px; }
+.overview-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; }
+.overview-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+.overview-head input[type="month"] { width: 170px; }
 td.cell-bad { color: var(--bad); font-weight: 700; }
 .count-dot {
   position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 100px;
   background: var(--bad); color: #fff; font-size: 11px; font-weight: 800; line-height: 18px; text-align: center;
 }
-.bell, .row-comment summary { position: relative; }
+.bell { position: relative; }
 .attention-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 14px; }
 .attention-card {
   display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--radius);
@@ -1022,13 +1038,16 @@ td.cell-bad { color: var(--bad); font-weight: 700; }
 .comment-badge-resolved { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
 .good-btn { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
 .comment-form textarea { width: 100%; resize: vertical; }
-.add-comment > summary, .row-comment > summary, .closed-comments > summary { list-style: none; cursor: pointer; }
-.add-comment > summary::-webkit-details-marker, .row-comment > summary::-webkit-details-marker { display: none; }
+.add-comment > summary, .closed-comments > summary { list-style: none; cursor: pointer; }
+.add-comment > summary::-webkit-details-marker { display: none; }
 .add-comment[open] > summary { margin-bottom: 8px; }
-.row-comment { position: relative; }
-.row-comment-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; width: 320px; padding: 12px; box-shadow: var(--shadow-hover); }
-.overview-table .table-wrap, .overview-table { overflow: visible; }
-@media (max-width: 1280px) { .overview-table { overflow-x: auto; } }
+.comment-pop {
+  width: min(420px, calc(100vw - 32px)); padding: 18px; margin: auto; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink); box-shadow: var(--shadow-hover);
+}
+.comment-pop::backdrop { background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(2px); }
+.comment-pop h3 { margin: 0 0 10px; font-size: 15px; }
+.icon-btn-svg { position: relative; }
 .notif-list { gap: 0; padding: 6px; }
 .notif { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 12px; color: var(--ink); }
 .notif + .notif { border-top: 1px solid var(--grid); }

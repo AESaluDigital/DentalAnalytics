@@ -33,6 +33,14 @@ function CName({ name, alias, strong = true }: { name: string; alias: string; st
   );
 }
 
+function ChatIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
+    </svg>
+  );
+}
+
 function Avatar({ name }: { name: string }) {
   return (
     <span className="client-avatar" aria-hidden>
@@ -45,7 +53,7 @@ function Avatar({ name }: { name: string }) {
 function Platforms({ c }: { c: OverviewClient }) {
   const p = c.platforms;
   return (
-    <span className="row" style={{ gap: 4 }}>
+    <span className="plat-badges">
       {p.meta && <span className="badge meta">Meta</span>}
       {p.google && <span className="badge gads">Google</span>}
       {p.ga4 && <span className="badge ga4">GA4</span>}
@@ -112,7 +120,7 @@ function Thread({ c, back }: { c: AttentionComment; back: string }) {
         <form action={replyAction} className="row reply-form">
           <input type="hidden" name="commentId" value={c.id} />
           <input type="hidden" name="back" value={back} />
-          <input name="body" required maxLength={2000} placeholder="Responder…" aria-label="Resposta" />
+          <input type="text" name="body" required maxLength={2000} placeholder="Responder…" aria-label="Resposta" />
           <button className="btn" type="submit">Responder</button>
         </form>
         <form action={setStatusAction} className="row" style={{ gap: 6 }}>
@@ -186,7 +194,7 @@ async function Body({ user, monthParam, force, back }: { user: SessionUser; mont
       <Avatar name={c.name} />
       <div style={{ minWidth: 0 }}>
         {canDash ? <Link href={dashHref(c.id)}><CName name={c.name} alias={aliasOf.get(c.id)!} /></Link> : <CName name={c.name} alias={aliasOf.get(c.id)!} />}
-        <div style={{ marginTop: 4 }}><Platforms c={c} /></div>
+        <Platforms c={c} />
       </div>
     </div>
   );
@@ -202,7 +210,7 @@ async function Body({ user, monthParam, force, back }: { user: SessionUser; mont
         <div className="kpi"><span className="kpi-label">Investimento total</span><span className="kpi-value">{money(sum.spend)}</span>
           <span className="kpi-delta"><span className="muted">{data.clients.filter((c) => c.totals.spend > 0).length} clientes com investimento</span></span></div>
         <div className="kpi"><span className="kpi-label">Conversões</span><span className="kpi-value">{int(sum.conv)}</span></div>
-        <div className="kpi"><span className="kpi-label">CPL médio dos clientes<InfoTip label="CPL médio" text="Média simples do CPL dos clientes com investimento no período (cada cliente pesa igual). É a régua do ponto de atenção." /></span>
+        <div className="kpi"><span className="kpi-label">CPL médio<InfoTip label="CPL médio" text="Média simples do CPL dos clientes com investimento no período (cada cliente pesa igual). É a régua do ponto de atenção." /></span>
           <span className="kpi-value">{money(avg.cpl)}</span></div>
         <div className="kpi"><span className="kpi-label">% conversão média<InfoTip label="% conversão média" text="Média simples da taxa de conversão (conversões ÷ cliques) dos clientes com investimento no período. É a régua do ponto de atenção." /></span>
           <span className="kpi-value">{pct(avg.conversionRate)}</span></div>
@@ -248,7 +256,7 @@ async function Body({ user, monthParam, force, back }: { user: SessionUser; mont
                   </details>
                 )}
                 <details className="add-comment">
-                  <summary className="btn">💬 Comentar ponto de atenção</summary>
+                  <summary className="btn"><ChatIcon /> Comentar ponto de atenção</summary>
                   <CommentForm clientId={c.id} back={back} />
                 </details>
               </article>
@@ -295,19 +303,21 @@ async function Body({ user, monthParam, force, back }: { user: SessionUser; mont
                     <td className="num">{money(k.cpc, c.currency)}</td>
                     <td className="num">{pct(k.ctr, 2)}</td>
                     <td className={`num${crBad ? " cell-bad" : ""}`}>{pct(k.conversionRate, 2)}</td>
-                    <td className="num">{k.roas === null || k.roas === 0 ? "—" : `${k.roas.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}x`}</td>
+                    <td className="num">{k.roas === null || k.roas < 0.01 ? "—" : `${k.roas.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}x`}</td>
                     <td className="num">{paceText(c)}</td>
                     <td>
-                      <div className="row" style={{ flexWrap: "nowrap", gap: 6, justifyContent: "flex-end" }}>
-                        <details className="row-comment">
-                          <summary className="btn icon" title="Comentar ponto de atenção" aria-label="Comentar ponto de atenção">
-                            💬{openN > 0 && <span className="count-dot">{openN}</span>}
-                          </summary>
-                          <div className="row-comment-pop card">
-                            <CommentForm clientId={c.id} back={back} compact />
-                          </div>
-                        </details>
-                        {canDash && <Link className="btn" href={dashHref(c.id)}>Abrir →</Link>}
+                      <div className="overview-actions">
+                        <button type="button" className="btn icon icon-btn-svg" popoverTarget={`comentar-${c.id}`}
+                          title="Comentar ponto de atenção" aria-label="Comentar ponto de atenção">
+                          <ChatIcon />{openN > 0 && <span className="count-dot">{openN}</span>}
+                        </button>
+                        <div id={`comentar-${c.id}`} popover="auto" className="comment-pop">
+                          <h3>Ponto de atenção · <CName name={c.name} alias={aliasOf.get(c.id)!} strong={false} /></h3>
+                          <CommentForm clientId={c.id} back={back} />
+                        </div>
+                        {canDash && (
+                          <Link className="btn icon" href={dashHref(c.id)} title="Abrir dashboard" aria-label="Abrir dashboard">→</Link>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -343,7 +353,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
           <h1>Visão geral</h1>
           <p className="muted small" style={{ margin: "4px 0 0" }}>Todos os clientes com as métricas básicas do mês e os que precisam de atenção.</p>
         </div>
-        <div className="row no-print">
+        <div className="overview-head no-print">
           <HideNamesToggle />
           <div className="seg" role="group" aria-label="Mês">
             <Link className="btn" href={`/overview?month=${current}`} aria-pressed={m === current}>Mês atual</Link>
