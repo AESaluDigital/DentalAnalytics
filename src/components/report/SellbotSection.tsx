@@ -226,6 +226,8 @@ export default function SellbotSection({ data, range, currency, adSpend, adSpend
                       </span>
                       <span className="funnel-num">{int(stageTotal(s))}</span>
                       <span className="funnel-val funnel-split">
+                        <span className="open" aria-label={`${int(s.count)} em aberto`}>{int(s.count)}</span>
+                        <span className="muted" aria-hidden>·</span>
                         <span className="won" aria-label={`${int(won)} ganhos`}>{int(won)}</span>
                         <span className="muted" aria-hidden>·</span>
                         <span className="lost" aria-label={`${int(lost)} perdidos`}>{int(lost)}</span>

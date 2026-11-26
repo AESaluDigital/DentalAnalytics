@@ -721,7 +721,7 @@ td.actions { text-align: right; }
 .kpi-tone-bad .kpi-value { color: var(--bad); }
 .kpi-tone-warn .kpi-value { color: var(--brand-orange); }
 .funnel { display: flex; flex-direction: column; gap: 10px; }
-.funnel-row { display: grid; grid-template-columns: minmax(120px, 34%) 1fr 48px 110px; gap: 10px; align-items: center; font-size: 13px; }
+.funnel-row { display: grid; grid-template-columns: minmax(120px, 34%) 1fr 48px 130px; gap: 10px; align-items: center; font-size: 13px; }
 .funnel-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .funnel-bar { height: 22px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
 .funnel-bar span { display: block; height: 100%; border-radius: 6px; min-width: 3px; animation: grow 0.8s var(--ease) both; }
@@ -761,6 +761,7 @@ a .source-not_configured:hover { opacity: 1; border-color: var(--brand-teal); }
 .funnel-stack > span:last-child { border-radius: 0 6px 6px 0; }
 .funnel-stack > span:only-child { border-radius: 6px; }
 .funnel-split { display: inline-flex; justify-content: flex-end; gap: 6px; font-weight: 700; font-size: 13px; }
+.funnel-split .open { color: #00A86B; }
 .funnel-split .won { color: var(--series-3); }
 .funnel-split .lost { color: var(--bad); }
 .funnel-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding-top: 8px; border-top: 1px dashed var(--border); }
